@@ -74,7 +74,7 @@ TEST(fpls_test, laplacian_samplingatnodes_sequential_off) {
     rsvd.set_max_iter(20);
     FPLS<SpaceOnly> model(pde, Sampling::mesh_nodes, rsvd);   // functional partial least squares model
     model.set_lambda_D(lambda_D);
-    model.set_smoothing_step_calibrator(fdapde::calibration::Off {}(SVector<1>(lambda_D)));
+    model.set_regression_step_calibrator(fdapde::calibration::Off {}(SVector<1>(lambda_D)));
     // set model's data
     BlockFrame<double, int> df;
     df.insert(OBSERVATIONS_BLK, DMatrix<double>(Y.rowwise() - Y.colwise().mean()));   // pointwise centred responses
@@ -115,23 +115,23 @@ TEST(fpls_test, laplacian_samplingatnodes_sequential_gcv) {
     // define model
     std::size_t seed = 476813;
     // grid for smoothing parameter selection
-    std::vector<DVector<double>> lambda_grid;
-    for (double x = -4; x <= 0; x += 1) lambda_grid.push_back(SVector<1>(std::pow(10, x)));
+    DMatrix<double> lambda_grid(5, 1);
+    for (int i = 0; i < 5; ++i) lambda_grid(i, 0) = std::pow(10, -4 + 1.0 * i);
     RegularizedSVD<fdapde::sequential> rsvd {Calibration::gcv};
     rsvd.set_tolerance(1e-2);
     rsvd.set_max_iter(20);
     rsvd.set_lambda(lambda_grid);
     rsvd.set_seed(seed);   // for reproducibility purposes in testing
     FPLS<SpaceOnly> model(pde, Sampling::mesh_nodes, rsvd);   // functional partial least square models
-    model.set_smoothing_step_calibrator(
-      fdapde::calibration::GCV {Grid<fdapde::Dynamic> {}, StochasticEDF(1000, seed)}(lambda_grid));
+    model.set_regression_step_calibrator(
+      fdapde::calibration::GCV<SpaceOnly> {Grid<fdapde::Dynamic> {}, StochasticEDF(1000, seed)}(lambda_grid));
     // set model's data
     BlockFrame<double, int> df;
     df.insert(OBSERVATIONS_BLK, DMatrix<double>(Y.rowwise() - Y.colwise().mean()));   // pointwise centred responses
     // smooth centred functional covariates (select optimal smoothing)
     auto centered_covs = center(
       X, SRPDE {pde, Sampling::mesh_nodes},
-      fdapde::calibration::GCV {Grid<fdapde::Dynamic> {}, StochasticEDF(1000, seed)}(lambda_grid));
+      fdapde::calibration::GCV<SpaceOnly> {Grid<fdapde::Dynamic> {}, StochasticEDF(1000, seed)}(lambda_grid));
     df.insert(DESIGN_MATRIX_BLK, centered_covs.fitted);
     model.set_data(df);
     // solve FPLS problem

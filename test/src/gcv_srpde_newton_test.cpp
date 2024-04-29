@@ -27,11 +27,14 @@ using fdapde::core::PDE;
 #include "../../fdaPDE/models/regression/srpde.h"
 #include "../../fdaPDE/models/regression/gcv.h"
 #include "../../fdaPDE/models/sampling_design.h"
+#include "../../fdaPDE/models/regression/regression_type_erasure.h"
 using fdapde::models::SRPDE;
 using fdapde::models::ExactEDF;
 using fdapde::models::GCV;
 using fdapde::models::StochasticEDF;
 using fdapde::models::Sampling;
+using fdapde::models::RegressionView;
+#include "../../fdaPDE/calibration/gcv.h"
 
 #include "utils/constants.h"
 #include "utils/mesh_loader.h"
@@ -170,10 +173,15 @@ TEST(gcv_srpde_newton_test, laplacian_nonparametric_samplingatnodes_newton_fd_st
   GCV.set_step(4e-08);
   // optimize GCV
   Newton<fdapde::Dynamic> opt(10, 0.05, 1);
-  DVector<double> pt = SVector<1>(6.25e-06);
+  DMatrix<double> pt = SVector<1>(6.25e-06);
   opt.optimize(GCV, pt);
   auto best_lambda = opt.optimum();
   DVector<double> expected_lambda = SVector<1>(0.0000075627208132);
   // check optimal lambda
-  EXPECT_TRUE( almost_equal(best_lambda[0], expected_lambda[0]) );
+  EXPECT_TRUE(almost_equal(best_lambda[0], expected_lambda[0]));
+
+  // check consistency with GCV calibrator
+  auto GCV_ = fdapde::calibration::GCV<SpaceOnly> {Newton<fdapde::Dynamic>(10, 0.05, 1), StochasticEDF(100, seed)};
+  GCV_.set_step(4e-8);
+  EXPECT_TRUE(GCV_(pt).fit(RegressionView<void>(model)) == opt.optimum());
 }

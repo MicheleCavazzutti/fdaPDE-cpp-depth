@@ -24,9 +24,9 @@
 #include "../../calibration/off.h"
 #include "../../calibration/gcv.h"
 using fdapde::calibration::Calibrator;
+#include "center.h"
 #include "functional_base.h"
 #include "regularized_svd.h"
-#include "center.h"
 
 namespace fdapde {
 namespace models {
@@ -39,26 +39,27 @@ class FPLS : public FunctionalBase<FPLS<RegularizationType_>, RegularizationType
     using This = FPLS<RegularizationType>;
     using Base = FunctionalBase<This, RegularizationType>;
     using SmootherType = std::conditional_t<is_space_only<This>::value, SRPDE, STRPDE<RegularizationType, monolithic>>;
-    IMPORT_MODEL_SYMBOLS;
-    using Base::df_;
-    using Base::n_basis;
-    using Base::n_obs;
-    using Base::n_stat_units;
-    using Base::X;   // n_stat_units \times n_locs data matrix
+    IMPORT_MODEL_SYMBOLS
+    using Base::df_;            // BlockFrame for problem's data storage
+    using Base::n_basis;        // number of basis function over physical domain
+    using Base::n_obs;          // overall number of samples (n_stat_units * n_locs)
+    using Base::n_stat_units;   // number of statistical units
+    using Base::X;              // n_stat_units \times n_locs data matrix
 
     // constructors
     FPLS() = default;
-    fdapde_enable_constructor_if(is_space_only, This)
-      FPLS(const pde_ptr& pde, Sampling s, RegularizedSVD<sequential> rsvd) :
-        Base(pde, s), rsvd_(rsvd) {};
-    fdapde_enable_constructor_if(is_space_time_separable, This)
-      FPLS(const pde_ptr& space_penalty, const pde_ptr& time_penalty, Sampling s, RegularizedSVD<sequential> rsvd) :
-        Base(space_penalty, time_penalty, s), rsvd_(rsvd) {};
+    // space-only constructor
+    FPLS(const Base::PDE& pde, Sampling s, RegularizedSVD<sequential> rsvd) requires(is_space_only<This>::value) :
+      Base(pde, s), rsvd_(rsvd) { }
+    // space-time separable constructor
+    FPLS(const Base::PDE& space_penalty, const Base::PDE& time_penalty, Sampling s, RegularizedSVD<sequential> rsvd)
+      requires(is_space_time_separable<This>::value) : Base(space_penalty, time_penalty, s), rsvd_(rsvd) { }
 
     void init_model() {
         // initialize smoothing solver for regression step
-        if constexpr (is_space_only<SmootherType>::value) { smoother_ = SmootherType(Base::pde(), Base::sampling()); }
-	else {
+        if constexpr (is_space_only<SmootherType>::value) {
+            smoother_ = SmootherType(Base::pde(), Base::sampling());
+        } else {
             smoother_ = SmootherType(Base::pde(), Base::time_pde(), Base::sampling());
             smoother_.set_temporal_locations(Base::time_locs());
         }
@@ -68,7 +69,7 @@ class FPLS : public FunctionalBase<FPLS<RegularizationType_>, RegularizationType
                 calibrator_ = calibration::Off {}(Base::lambda());
             } else {
                 calibrator_ = calibration::GCV {core::Grid<Dynamic> {}, StochasticEDF(100)}(rsvd_.lambda_grid());
-	    }
+            }
         }
         return;
     }
@@ -86,7 +87,7 @@ class FPLS : public FunctionalBase<FPLS<RegularizationType_>, RegularizationType
         for (std::size_t h = 0; h < n_comp_; ++h) {
             // correlation maximization
             // solves \argmin_{v,w} \norm_F{Y_h^\top*X_h - v^\top*w}^2 + (v^\top*v)*P_{\lambda}(w)
-	  rsvd_.compute(Y_h.transpose() * X_h, *this, 1);
+            rsvd_.compute(Y_h.transpose() * X_h, *this, 1);
             W_.col(h) = rsvd_.loadings();
             V_.col(h) = rsvd_.scores() / rsvd_.loadings_norm()[0];
             T_.col(h) = X_h * Psi() * W_.col(h);   // X latent component
@@ -109,16 +110,15 @@ class FPLS : public FunctionalBase<FPLS<RegularizationType_>, RegularizationType
     const DMatrix<double>& X() const { return df_.template get<double>(DESIGN_MATRIX_BLK); }
     const DMatrix<double>& X_space_directions() const { return W_; }
     const DMatrix<double>& Y_space_directions() const { return V_; }
-    const DMatrix<double>& X_latent() const { return T_; }
+    const DMatrix<double>& X_latent_scores() const { return T_; }
     const DMatrix<double>& X_loadings() const { return C_; }
     const DMatrix<double>& Y_loadings() const { return D_; }
-    DMatrix<double> fitted() const { return X_latent() * Y_loadings().transpose(); }
-    DMatrix<double> reconstructed() const { return X_latent() * X_loadings().transpose(); }
+    DMatrix<double> fitted() const { return X_latent_scores() * Y_loadings().transpose(); }
+    DMatrix<double> reconstructed() const { return X_latent_scores() * X_loadings().transpose(); }
     const DMatrix<double>& B() const { return B_; }
     // setters
     void set_ncomp(std::size_t n_comp) { n_comp_ = n_comp; }
-    void set_rsvd(const RegularizedSVD<sequential>& rsvd) { rsvd_ = rsvd; }
-    template <typename CalibratorType_> void set_smoothing_step_calibrator(CalibratorType_&& calibrator) {
+    template <typename CalibratorType_> void set_regression_step_calibrator(CalibratorType_&& calibrator) {
         calibrator_ = calibrator;
     }
    private:

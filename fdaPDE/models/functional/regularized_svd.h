@@ -25,6 +25,7 @@
 using fdapde::calibration::Calibration;
 #include "../model_traits.h"
 #include "power_iteration.h"
+#include "../../core/fdaPDE/optimization/grid.h"
 
 
 namespace fdapde {
@@ -39,11 +40,11 @@ template <typename SolutionPolicy_> class RegularizedSVD;
 template <> class RegularizedSVD<sequential> {
    private:
     Calibration calibration_;    // PC function's smoothing parameter selection strategy
-    std::size_t n_folds_ = 10;   // for a kcv calibration strategy, the number of folds
-    std::vector<DVector<double>> lambda_grid_;
+    int n_folds_ = 10;   // for a kcv calibration strategy, the number of folds
+    DMatrix<double> lambda_grid_;
     // power iteration parameters
-    double tolerance_ = 1e-6;     // relative tolerance between Jnew and Jold, used as stopping criterion
-    std::size_t max_iter_ = 20;   // maximum number of allowed iterations
+    double tolerance_ = 1e-6;   // relative tolerance between Jnew and Jold, used as stopping criterion
+    int max_iter_ = 20;         // maximum number of allowed iterations
     int seed_ = fdapde::random_seed;
 
     // problem solution
@@ -58,9 +59,9 @@ template <> class RegularizedSVD<sequential> {
        private:
         friend RegularizedSVD;
         RegularizedSVD* rsvd_;
-        int index_;   // current rank
-        PowerIteration<ModelType> solver_;        // rank-one step solver
+        int index_;                               // current rank
         DMatrix<double> X_;                       // deflated data
+        PowerIteration<ModelType> solver_;        // rank-one step solver
         Eigen::JacobiSVD<DMatrix<double>> svd_;   // thin monolithic Singular Value Decomposition (not regularized)
         ModelType& model_;
 
@@ -122,7 +123,7 @@ template <> class RegularizedSVD<sequential> {
             return *this;
         }
         // iterate until desired rank not reached
-        bool operator!=(std::size_t rank) {
+        bool operator!=(int rank) {
             fdapde_assert(rank > 0);
             if (index_ != rank) { rank_one_step(); }   // trigger computation of next component only if not ended
             return index_ != rank;
@@ -140,7 +141,7 @@ template <> class RegularizedSVD<sequential> {
 
     // sequentially solves \argmin_{s,f} \norm_F{X - s^\top*f}^2 + (s^\top*s)*P_{\lambda}(f), up to the specified rank,
     // selecting the level of smoothing of the component according to the desired strategy
-    template <typename ModelType> void compute(const DMatrix<double>& X, ModelType& model, std::size_t rank) {
+    template <typename ModelType> void compute(const DMatrix<double>& X, ModelType& model, int rank) {
         // preallocate space
         loadings_.resize(model.n_basis(), rank);
         scores_.resize(X.rows(), rank);
@@ -162,19 +163,18 @@ template <> class RegularizedSVD<sequential> {
     const DMatrix<double>& loadings() const { return loadings_; }
     const DVector<double>& loadings_norm() const { return loadings_norm_; }
     const std::vector<DVector<double>>& selected_lambdas() const { return selected_lambdas_; }
-    const std::vector<DVector<double>>& lambda_grid() const { return lambda_grid_; }
+    const DMatrix<double>& lambda_grid() const { return lambda_grid_; }
     Calibration calibration() const { return calibration_; }
-
     // setters
     void set_tolerance(double tolerance) { tolerance_ = tolerance; }
-    void set_max_iter(std::size_t max_iter) { max_iter_ = max_iter; }
-    void set_seed(std::size_t seed) { seed_ = seed; }
-    RegularizedSVD& set_lambda(const std::vector<DVector<double>>& lambda_grid) {
+    void set_max_iter(int max_iter) { max_iter_ = max_iter; }
+    void set_seed(int seed) { seed_ = seed; }
+    RegularizedSVD& set_lambda(const DMatrix<double>& lambda_grid) {
         fdapde_assert(calibration_ != Calibration::off);
         lambda_grid_ = lambda_grid;
         return *this;
     }
-    RegularizedSVD& set_nfolds(std::size_t n_folds) {
+    RegularizedSVD& set_nfolds(int n_folds) {
         fdapde_assert(calibration_ == Calibration::kcv);
         n_folds_ = n_folds;
         return *this;
@@ -185,7 +185,7 @@ template <> class RegularizedSVD<sequential> {
 template <> class RegularizedSVD<monolithic> {
    public:
     // solves \norm{X - U*\Psi^\top}_F^2 + Tr[U*P_{\lambda}(f)*U^\top] retaining the first rank components
-    template <typename ModelType> void compute(const DMatrix<double>& X, ModelType& model, std::size_t rank) {
+    template <typename ModelType> void compute(const DMatrix<double>& X, ModelType& model, int rank) {
         // compute matrix C = \Psi^\top*\Psi + P(\lambda)
         DMatrix<double> C = model.Psi().transpose() * model.Psi() + model.P();
         // compute the inverse of the cholesky factor of C, D^{-1}
@@ -200,7 +200,7 @@ template <> class RegularizedSVD<monolithic> {
         loadings_ =
           (svd.singularValues().head(rank).asDiagonal() * svd.matrixV().leftCols(rank).transpose() * invD).transpose();
         loadings_norm_.resize(rank);
-        for (std::size_t i = 0; i < rank; ++i) {
+        for (int i = 0; i < rank; ++i) {
             loadings_norm_[i] = std::sqrt(loadings_.col(i).dot(model.R0() * loadings_.col(i)));   // L^2 norm
             loadings_.col(i) = loadings_.col(i) / loadings_norm_[i];
         }
@@ -211,6 +211,7 @@ template <> class RegularizedSVD<monolithic> {
     const DMatrix<double>& scores() const { return scores_; }
     const DMatrix<double>& loadings() const { return loadings_; }
     const DVector<double>& loadings_norm() const { return loadings_norm_; }
+    Calibration calibration() const { return Calibration::off; }   // calibration is implicitly off
    private:
     // let E*\Sigma*F^\top the reduced (rank r) SVD of X*\Psi*(D^{1})^\top, with D^{-1} the inverse of the cholesky
     // factor of \Psi^\top * \Psi + P(\lambda), then

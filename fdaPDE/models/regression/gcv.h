@@ -32,27 +32,25 @@ using fdapde::models::SpaceOnly;
 
 namespace fdapde {
 namespace models {
-
-// type-erased wrapper for Tr[S] computation strategies
-struct EDFStrategy__ {
-    template <typename M> using fn_ptrs = fdapde::mem_fn_ptrs<&M::compute, &M::set_model>;
-    // forwardings
-    decltype(auto) compute() { return fdapde::invoke<double, 0>(*this); }
-    void set_model(const RegressionView<void>& model) { fdapde::invoke<void, 1>(*this, model); }
-};
-using EDFStrategy = fdapde::erase<fdapde::heap_storage, EDFStrategy__>;
   
 // base functor implementing the expression of the GCV index for model M (type-erased).
 class GCV {
-   public:
+   private:
     using This = GCV;
     using VectorType = DVector<double>;
     using MatrixType = DMatrix<double>;
-    static constexpr int DomainDimension = fdapde::Dynamic;
-    RegressionView<void> model_;    // model to calibrate
-    EDFStrategy trS_;               // strategy used to evaluate the trace of smoothing matrix S
-    std::vector<double> edfs_;      // equivalent degrees of freedom q + Tr[S]
-    std::vector<double> gcvs_;      // computed values of GCV index
+    // type-erased wrapper for Tr[S] computation strategy
+    struct EDFStrategy__ {
+        template <typename M> using fn_ptrs = fdapde::mem_fn_ptrs<&M::compute, &M::set_model>;
+        // forwardings
+        decltype(auto) compute() { return fdapde::invoke<double, 0>(*this); }
+        void set_model(const RegressionView<void>& model) { fdapde::invoke<void, 1>(*this, model); }
+    };
+
+    RegressionView<void> model_;
+    erase<heap_storage, EDFStrategy__> trS_;   // strategy used to evaluate the trace of smoothing matrix S
+    std::vector<double> edfs_;                 // equivalent degrees of freedom q + Tr[S]
+    std::vector<double> gcvs_;                 // computed values of GCV index
     // cache pairs (lambda, Tr[S]) for fast access if GCV is queried at an already computed point
     std::map<VectorType, double, fdapde::d_vector_compare<double>> cache_;
 
@@ -79,18 +77,28 @@ class GCV {
         return gcv_value;
     }
    public:
+    static constexpr int DomainDimension = fdapde::Dynamic;
+    using EDFStrategy = erase<heap_storage, EDFStrategy__>;
+    // constructors
     template <typename ModelType_, typename EDFStrategy_>
     GCV(const ModelType_& model, EDFStrategy_&& trS) : model_(model), trS_(trS), gcv_(this, &This::gcv_impl) {
-        // resize gcv input space dimension
-        if constexpr (is_space_only<std::decay_t<ModelType_>>::value) gcv_.resize(1);
-        else gcv_.resize(2);
         // set model pointer in edf computation strategy
         trS_.set_model(model_);
-    };
+    }
     template <typename ModelType_> GCV(const ModelType_& model) : GCV(model, StochasticEDF()) { }
-    GCV(const GCV& other) : model_(other.model_), trS_(other.trS_), gcv_(this, &This::gcv_impl) {};
+    GCV(const GCV& other) : model_(other.model_), trS_(other.trS_), gcv_(this, &This::gcv_impl) {
+        // copy other GCV functor configuration
+        gcv_.resize(other.gcv_.inner_size());
+	gcv_.set_step(other.gcv_.step());
+    }
     GCV() : gcv_(this, &This::gcv_impl) { }
-
+    GCV& operator=(const GCV& other) {
+        model_ = other.model_;
+        trS_ = other.trS_;
+        gcv_ = ScalarField<fdapde::Dynamic, double (This::*)(const VectorType&)>(this, &This::gcv_impl);
+        return *this;
+    }
+  
     // call operator and numerical derivative approximations
     double operator()(const VectorType& lambda) { return gcv_(lambda); }
     std::function<VectorType(const VectorType&)> derive() const { return gcv_.derive(); }
@@ -112,18 +120,19 @@ class GCV {
 	edfs_.clear(); gcvs_.clear(); cache_.clear();
     }
     template <typename ModelType_> void set_model(ModelType_&& model) {
-      	// resize gcv input space dimension
-        if constexpr (is_space_only<std::decay_t<ModelType_>>::value) gcv_.resize(1);
-        else gcv_.resize(2);
         model_ = model;
 	if(trS_) trS_.set_model(model_);
         edfs_.clear(); gcvs_.clear(); cache_.clear();
     }
     void set_step(double step) { gcv_.set_step(step); }
-
+    void resize(int gcv_dynamic_inner_size) {
+        fdapde_assert(gcv_dynamic_inner_size == 1 || gcv_dynamic_inner_size == 2);
+        gcv_.resize(gcv_dynamic_inner_size);
+    }
     // getters
     const std::vector<double>& edfs() const { return edfs_; }   // equivalent degrees of freedom q + Tr[S]
     const std::vector<double>& gcvs() const { return gcvs_; }   // computed values of GCV index
+    int inner_size() const { return gcv_.inner_size(); }
 };
 
 // provides the analytical expresssion of GCV gradient and hessian, for newton-like optimization methods
