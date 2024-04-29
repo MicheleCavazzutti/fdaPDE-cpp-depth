@@ -49,8 +49,9 @@ namespace fdapde {
       void set_train_NA_matrix(const DMatrix<bool> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
       void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
       void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
-      void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
+      void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Provides phi function used to evaluate the IFD phi in the nodes of the functions
       void set_depth_types(const Dvector<std::string> & depth_types ) { depth_types_ = depth_types; }
+      void set_pred_depth_types(const Dvector<std::string> & depth_types ) { pred_depth_types_ = pred_depth_types; }
       void set_voronoy_r_fit(const DMatrix<double> &  voronoy_r_fit ) { return voronoy_r_fit_ =  voronoy_r_fit ; } // Functions used for fitting and IFDs computation   
       void set_voronoy_r_pred(const DMatrix<double> &  voronoy_r_pred ) { return voronoy_r_pred_ =  voronoy_r_pred; } // Functions used for IFD prediction
       void set_df_fit( const BlockFrame<double> & df_fit ) { df_fit_ = df_fit ; } // We will set something different from R_DEPTH
@@ -86,9 +87,9 @@ namespace fdapde {
 	observation_density_vector_.resize(domain.get_n_nodes());
 	for (sdt::size_t i; i<domain.get_n_nodes(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoy mask. 
 	  auto obs_element = Voronoy_NA_fit_.col(i);
-	  observation_density_vector_[i] = obs_element.sum(); // Check wether this is present or not
+	  observation_density_vector_[i] = obs_element.sum(); // Check wether this is present or not // Be careful of what is bringing nside the Voronoy_NA_fit part: is it counting the NA or the present ones?
 	}
-	observation_density_vector_ = observation_density_vector_ / train_functions_.rows();
+	observation_density_vector_ = observation_density_vector_ / train_functions_.rows(); // Here I should count the present ones!!!
 	return; 
       } 
       
@@ -99,40 +100,147 @@ namespace fdapde {
 	std::size_t n_pred = this->pred_functions_.size()[1];
 	std::size_t n_loc = this->locations_.size();
 	std::size_t n_nodes = this->domain_.get_n_nodes(); 
-      
+	
+	// Remark: this is not really needed. In future we will have also the predict methods, so this is not really needed. 
         // Create the matrices that will contain the overall pred data
-	DMatrix<double> pred_tot;
-	DMatrix<double> pred_tot_NA;
+	//DMatrix<double> pred_tot;
+	//DMatrix<bool> pred_tot_NA;
 	
-	/////////////////////////////////
-	// Fill the pred tot data
-	/////////////////////////////////
+	//pred_tot.resize(n_train + n_pred, n_nodes); // Remark; in future we may separate the two of them to give further flexibility, next step 
+	//pred_tot_NA.resize(n_train + n_pred, n_nodes); // Remark; in future we may separate the two of them to give further flexibility, next step 
 	
-	DepthSolver solver (this->voronoy_r_fit_, this->Voronoy_NA_fit_, pred_tot,  pred_tot_NA); // This solver uses the Voronoy representations of the fit functions to estimate the empirical measure.
+	//pred_tot.firstRows(n_train) = voronoy_r_fit;
+	//pred_tot.lastRows(n_pred) = voronoy_r_pred;
+	//pred_tot_NA.firstRows(n_train) = Vornoy_fit_NA;
+	//pred_tot_NA.lastRows(n_pred) = Vornoy_pred_NA;
+	
+	//DepthSolver solver (this->voronoy_r_fit_, this->Voronoy_NA_fit_, pred_tot,  pred_tot_NA); // This solver uses the Voronoy representations of the fit functions to estimate the empirical measure.
+	DepthSolver solver (this->voronoy_r_fit_, this->Voronoy_NA_fit_); //, pred_tot,  pred_tot_NA); // This solver uses the Voronoy representations of the fit functions to estimate the empirical measure.
+	//solver = sol
+      
+        solver.set_pred_data(this->voronoy_r_fit_);
+        solver.set_pred_mask(this->Voronoy_NA_fit_);
       
 	this->IFD_fit_.resize(n_train, this->depth_types_.size());
-	this->IFD_pred_.resize(n_pred, this->depth_types_.size());
-	this->aux_fit_.resize(n_train, this->depth_types_.size());
-	this->aux_pred_.resize(n_pred, this->depth_types_.size());
+	//this->IFD_pred_.resize(n_pred, this->depth_types_.size());
+	this->aux_fit_.resize(n_train,2); //  ,this->depth_types_.size() before?
+	//this->aux_pred_.resize(n_pred, this->depth_types_.size());
       
 	// Create matrix to contain the merger of the Voronoy representation
-	DMatrix<double> voronoy_functions;
-	BinaryMatrix<fdapde::Dynamic> voronoy_mask;
+	//DMatrix<double> voronoy_functions;
+	//BinaryMatrix<fdapde::Dynamic> voronoy_mask;
+	
+	////////////
 	// Fill voronoy functions
 	// Still to be done
       
 	DMatrix<double> point_depth;
 	DMatrix<double> point_aux;
       
-	point_depth.resize(n_train + n_pred, this->depth_types_.size()); // this will contain the point depth, computed for each voronoy element, for each element 
-	point_aux.resize(n_train + n_pred, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
+	//point_depth.resize(n_train + n_pred, this->depth_types_.size()); // this will contain the point depth, computed for each voronoy element, for each element 
+	//point_aux.resize(n_train + n_pred, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
+	
+	point_depth.resize(n_train, this->depth_types_.size()); // this will contain the point depth, computed for each voronoy element, for each element 
+	point_aux.resize(n_train, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
 	
 	// Weighting function denominator
 	Real weight_den = 0;
       
 	for (std::size_t i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
-	  Real measure = (this->domain_.get_element(i)).get_measure;
+	  Real measure = 1 // still not existing (this->domain_.get_element(i)).get_measure();
+	  weight_den = weight_den + measure * this->phi_function_evaluation_[i];
+      
+	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
+      
+	    std::string type = depth_types_[j];
+      
+	    switch(type) {
+	    case "MBD":
+	      point_depth.col(j) = solver.compute_MBD(j) * this->phi_function_evaluation_[i];
+	      
+	      break;
+	    
+	    case "FMD":
+	      point_depth.col(j) = solver.compute_FMD(j);
+	      
+	      break;
+	    
+	    case "MHRD":
+	      DMatrix MHRD_solution = solver.compute_MHRD(j) * this->phi_function_evaluation_[i]; // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
+	      point_depth.col(j) = MHRD_solution.col(1);
+	      point_aux = MHRD_solution.lastCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
+            
+	      //aux_fit_ = aux_fit_ + point_aux.firstRows(n_train)*measure;
+	      aux_fit_ = aux_fit_ + point_aux*measure;
+	      //aux_pred_ = pred_fit_ + point_aux.lastRows(n_pred)*measure;
+	      
+	      break;
+	    
+	    default:
+	      
+	      break;
+	    }
+      
+      
+	  }
+	  
+      
+	  //IFD_fit_ = IFD_fit_ + point_depth.firstRows(n_train)*measure;
+	  IFD_fit_ = IFD_fit_ + point_depth*measure;
+	  //IFD_pred_ = IFD_pred_ + point_depth.lastRows(n_train)*measure;
+      
+	}
+	
+	for(std::size_t j=0; j < this->depth_types_.size();j++){ 
+	  if(depth_types_[j]=="MHRD"){// The minimum between epigraph and hipograph indices
+            IFD_fit_.col(j) = std::min(aux_fit_.col(1), aux_fit_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
+            //IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
+          }else{
+            if(depth_types_[j]=="MBD"){
+              IFD_fit_.col(j) = IFD_fit_.col(j) / weight_den;
+              //IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
+            }
+          }
+	}
+	
+	
+	// Now prepare output and return
+	// To be filled
+      
+	return; 
+      } 
+      
+      void predict() {
+      	// Get the useful numbers
+	std::size_t n_train = this->train_functions_.size()[1];
+	std::size_t n_pred = this->pred_functions_.size()[1];
+	std::size_t n_loc = this->locations_.size();
+	std::size_t n_nodes = this->domain_.get_n_nodes(); 
+      
+        solver.set_pred_data(this->voronoy_r_pred_);
+        solver.set_pred_mask(this->Voronoy_NA_pred_);
+        solver.reset_rankings_flag(false);
+      
+	this->IFD_pred_.resize(n_pred, this->depth_types_.size());
+	this->aux_pred_.resize(n_pred, this->depth_types_.size());
+      
+	////////////
+	// Fill voronoy functions
+	// Still to be done
+      
+	DMatrix<double> point_depth;
+	DMatrix<double> point_aux;
+	
+	point_depth.resize(n_pred, this->depth_types_.size()); // this will contain the point depth, computed for each voronoy element, for each element 
+	point_aux.resize(n_pred, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
+	
+	// Weighting function denominator
+	Real weight_den = 0;
+      
+	for (std::size_t i=0; i<n_nodes; i++){
+	  // Check the notion form Alessandro
+	  Real measure = 1 // still not existing (this->domain_.get_element(i)).get_measure;
 	  weight_den = weight_den + measure * this->phi_function_evaluation_[i];
       
 	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
@@ -155,9 +263,8 @@ namespace fdapde {
 	      point_depth.col(j) = MHRD_solution.col(1); 
 	      point_aux = MHRD_solution.lastCols(2);
             
-	      aux_fit_ = aux_fit_ + point_aux.firstRows(n_train)*measure;
-	      aux_pred_ = pred_fit_ + point_aux.lastRows(n_pred)*measure;
-	      
+	      aux_pred_ = aux_pred_ + point_aux*measure;
+
 	      break;
 	    
 	    default:
@@ -168,33 +275,30 @@ namespace fdapde {
       
 	  }
 	  
-      
-	  IFD_fit_ = IFD_fit_ + point_depth.firstRows(n_train)*measure;
-	  IFD_pred_ = IFD_pred_ + point_depth.lastRows(n_train)*measure;
+	  IFD_pred_ = IFD_pred_ + point_depth*measure;
       
 	}
 	
 	for(std::size_t j=0; j < this->depth_types_.size();j++){ 
 	  if(depth_types_[j]=="MHRD"){// The minimum between epigraph and hipograph indices
-            IFD_fit_.col(j) = std::min(aux_fit_.col(1), aux_fit_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
             IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
           }else{
             if(depth_types_[j]=="MBD"){
-              IFD_fit_.col(j) = IFD_fit_.col(j) / weight_den;
               IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
             }
           }
 	}
 	
-	// COmpute weighting function denominator and apply it to the computed depths
 	
-      
 	// Now prepare output and return
 	// To be filled
       
 	return; 
-      } 
-      void predict() {return; } // Compute the integrated depths for the prediction functions, used only in predict mode
+      
+      
+      
+      
+      return; } // Compute the integrated depths for the prediction functions, used only in predict mode
       
     private:
       const SpaceDomainType & domain_;          	// triangulated spatial domain
@@ -206,10 +310,12 @@ namespace fdapde {
       BinaryMatrix<fdapde::Dynamic> pred_NA_matrix_;    // Binary matrix containing the missing data pattern derived from the pred functions, used to compute the empirical densisty of the observational process. Dimension n_tain x n_loc
       DMatrix<double> phi_function_evaluation_: 	// This matrix contains the evaluation of the phi function produced in R. Is filled only after the initialization of the model
       DVector<std::string> depth_types_; 		// Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
+      DVector<std::string> pred_depth_types_; 		// Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
       DMatrix<double> voronoy_r_fit_; 			// Voronoy values for the fit functions. Dimension: n_train x n_nodes
       BinaryMatrix<fdapde::Dynamic> Voronoy_NA_fit_;    // Binary matrix containing the missing data pattern for the voronoy representation of the train functions. Dimension n_tain x n_nodes
       DMatrix<double> voronoy_r_pred_; 			// Voronoy values for the predict functions. Dimension: n_predict x n_nodes
       BinaryMatrix<fdapde::Dynamic> Voronoy_NA_pred_;   // Binary matrix containing the missing data pattern for the voronoy representation of the pred functions. Dimension n_tain x n_nodes
+      Depth_Solver solver; 				// Machine that computes the point depth when required in solve(). Is initialized in solve, but is also avalable for prediction.
       BlockFrame<double> df_fit_;   	   		// blockframe that contains the output for the fit functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
       BlockFrame<double> df_pred_;      		// blockframe that contains the output for the predict functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
       DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x univariate_depth_types.size()
@@ -219,7 +325,13 @@ namespace fdapde {
       
       // initialization methods
       void compute_voronoy_representation_fit(){
-      
+        // Still missing, to be computed
+        
+        // Fake code just used to check whter the phi computation is working or not
+        voronoy_r_fit_.resize(5,5);
+        Voronoy_NA_fit_.resize(5,5);
+        voronoy_r_pred_.resize(5,5);
+        Voronoy_NA_pred_.resize(5,5);
       
 	return;
       }
@@ -232,8 +344,8 @@ namespace fdapde {
     private:
       const DVector<double> & fit_data_;
       const DVector<bool> & fit_mask_;
-      const DVector<double> & pred_data_;
-      const DVector<bool> & pred_mask_;
+      DVector<double> pred_data_;
+      DVector<bool> pred_mask_;
       std::size_t n_train;
       std::size_t n_pred;
 
@@ -241,7 +353,7 @@ namespace fdapde {
       DMatric<int> NA_number;
       //DMatrix<double> MHRD_aux;
 
-      bool are_rankings_computed = false;
+      bool are_rankings_computed = false; // NBB In prediction put back to false
       //bool is_MHRD_aux_computed = false;
 
       void compute_rankings(){
@@ -276,11 +388,16 @@ namespace fdapde {
 
     public:
       Depth_Solver()=default;
-      Depth_Solver(const DVector<double> & fit_data, const DVector<bool> & fit_mask, const DVector<double> & pred_data, const DVector<bool> & pred_mask): fit_data_(fit_data), fit_mask_(fit_mask), pred_data_(pred_data), pred_mask_(pred_mask){
-	n_train = fit_data_.size();
-	n_pred = pred_data_.size();
-	
+      Depth_Solver(const DVector<double> & fit_data, const DVector<bool> & fit_mask): fit_data_(fit_data), fit_mask_(fit_mask){
+	n_train = fit_data_.rows();	
       }
+      
+      void set_pred_data(const DMatrix<double> & pred_data){pred_data_ = pred_data;
+        n_pred = pred_data.rows();
+      }
+      void set_pred_mask(const DMatrix<bool> & pred_mask){pred_mask_ = pred_mask;}
+      void set_pred_data(const DMatrix<double> & pred_data){pred_data_ = pred_data;}
+      void reset_rankings_flag(bool flag){this->are_rankings_computed = flag;}
 
       DVector<double> compute_MBD(std::size_t j){
 	if(!are_rankings_computed){
@@ -347,9 +464,6 @@ namespace fdapde {
 	}
       }
 	
-      DMatrix<double> compute_aux_MHRD(std::size_t i){
-	return;
-      }
     };
     
   }   // namespace models
