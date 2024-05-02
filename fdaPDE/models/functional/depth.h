@@ -312,7 +312,7 @@ namespace fdapde {
 	    case "MHRD":
 	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1);
-	      point_aux = MHRD_solution.lastCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
+	      point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
             
 	      //aux_fit_ = aux_fit_ + point_aux.firstRows(n_train)*measure;
 	      aux_fit_ = aux_fit_ + point_aux*measure;
@@ -363,7 +363,7 @@ namespace fdapde {
       
 	solver.set_pred_data(this->voronoi_r_pred_);
 	solver.set_pred_mask(this->Voronoi_NA_pred_);
-	solver.reset_rankings_flag(false);
+	//solver.reset_rankings_flag(false);
       
 	this->IFD_pred_.resize(n_pred, this->depth_types_.size());
 	this->aux_pred_.resize(n_pred, this->depth_types_.size());
@@ -383,7 +383,7 @@ namespace fdapde {
       
 	for (std::size_t i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
-	  double measure = 1 // still not existing (this->domain_.get_element(i)).get_measure;
+	  double measure =  this->voronoi_.cell(i).measure();
 	    weight_den = weight_den + measure * this->phi_function_evaluation_(i);
       
 	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
@@ -404,7 +404,7 @@ namespace fdapde {
 	    case "MHRD":
 	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1); 
-	      point_aux = MHRD_solution.lastCols(2);
+	      point_aux = MHRD_solution.rightCols(2);
             
 	      aux_pred_ = aux_pred_ + point_aux*measure;
 
@@ -560,7 +560,7 @@ namespace fdapde {
 	for(auto i = 0; i< n_pred; i++){
 	  for(auto j =0; j< n_nodes; j++){  
 	    if(Count_Pred_cells(i,j)!=0){
-	      voronoi_r_pred_(i,j) = voronoi_r_pred_(i,j)/Count_pred_cells(i,j);
+	      voronoi_r_pred_(i,j) = voronoi_r_pred_(i,j)/Count_Pred_cells(i,j);
 	    }
 	  }
 	}
