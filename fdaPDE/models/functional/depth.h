@@ -54,27 +54,27 @@ namespace fdapde {
 	
 	// Initialization
 	for(std::size_t i =0; i<n_nodes; i++){
-	  NA_number[i]=0;
+	  NA_number(i)=0;
 	}
 
         for(std::size_t j =0; j<n_nodes; j++){
 	  for(std::size_t i =0; i<n_pred; i++){
-	    if(pred_mask_[i,j]==true){ // Predict datum is NA
-	      rankings[i,j]=n_train;
+	    if(pred_mask_(i,j)==true){ // Predict datum is NA
+	      rankings(i,j)=n_train;
 	    }else{
 	      std::size_t count_down=0;
 	      for(std::size_t k =0; k<n_train; k++){
-		if(fit_mask_[k,j]==false && fit_data_[k,j] < pred_data_[i,j]){ // Fit datum is not NA and is lower than the predict datum
+		if(fit_mask_(k,j)==false && fit_data_(k,j) < pred_data_(i,j)){ // Fit datum is not NA and is lower than the predict datum
 		  count_down++;
 		}else{
 		}
-		rankings[i,j]=count_down;
+		rankings(i,j)=count_down;
 	      }
 	    }
 	  }
 	  for(std::size_t k=0; k< n_train; k++){ // Count the NA in train data
-	    if(fit_mask_[k,j]==true){
-	      this->NA_number[j]++;
+	    if(fit_mask_(k,j)==true){
+	      this->NA_number(j)++;
 	    }
 	  } 
 	}
@@ -108,11 +108,11 @@ namespace fdapde {
 	result.resize(n_pred);
       
 	for(std::size_t i = 0; i< n_pred; i++){
-	  if(this->n_train - this->NA_number[j] - this->rankings[i,j] > 0 ){ // Check, lui non sicuro
-	    result[i] = (double) 2*(this->n_train - this->NA_number[j] - this->rankings[i,j] - 1)*(this->rankings[i,j] + 1)/(double) ((this->n_train - this->NA_number[j] )*(this->n_train - this->NA_number[j] ));
+	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
+	    result(i) = (double) 2*(this->n_train - this->NA_number(j) - this->rankings(i,j) - 1)*(this->rankings(i,j) + 1)/(double) ((this->n_train - this->NA_number(j) )*(this->n_train - this->NA_number(j) ));
 	  }
 	  else{
-	    result[i] = 0;
+	    result(i) = 0;
 	  }
 	}
       
@@ -128,15 +128,15 @@ namespace fdapde {
 	result.resize(n_pred,3);
       
 	for(std::size_t i = 0; i< n_pred; i++){
-	  if(this->n_train - this->NA_number[j] - this->rankings[i,j] > 0 ){ // Check, lui non sicuro
-	    result[i,2] = (double) (this->n_train - this->NA_number[j] - rankings[k] - 1 )/(double) (this->n_train - this->NA_number[j]); // Hepigraph
-	    result[i,3] = (double) (this->rankings[i,j])/(double) (this->n_train - this->NA_number[j]) ; // Hipograph
-	    result[i,1] = std::min(result[i,2], result[i,3]); // MHRD local (discarded, but may be useful afterwards)
+	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
+	    result(i,2) = (double) (this->n_train - this->NA_number(j) - rankings(i,j) - 1 )/(double) (this->n_train - this->NA_number(j)); // Hepigraph
+	    result(i,3) = (double) (this->rankings(i,j))/(double) (this->n_train - this->NA_number(j)) ; // Hipograph
+	    result(i,1) = std::min(result(i,2), result(i,3)); // MHRD local (discarded, but may be useful afterwards)
 	  }
 	  else{
-	    result[i,1] = 0;
-	    result[i,2] = 0;
-	    result[i,3] = 0;
+	    result(i,1) = 0;
+	    result(i,2) = 0;
+	    result(i,3) = 0;
 	  }
 	}
       
@@ -152,11 +152,11 @@ namespace fdapde {
 	result.resize(n_pred);
 	
 	for(std::size_t i = 0; i< n_pred;){
-	  if(this->n_train - this->NA_number[j] - this->rankings[i,j] > 0 ){ // Check, lui non sicuro
-	    result[i] = 1 - (double) (2*(this->rankings[i,j] + 1)-1)/(double) (2*(this->n_train - this->NA_number[j]));
+	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
+	    result(i) = 1 - (double) (2*(this->rankings(i,j) + 1)-1)/(double) (2*(this->n_train - this->NA_number(j)));
 	  }
 	  else{
-	    result[i] = 0;
+	    result(i) = 0;
 	  }
 	}  
 	return result;
@@ -176,7 +176,7 @@ namespace fdapde {
 
       DEPTH() = default; // Check
       // constructor that takes as imput the mesh and other tools defined in the models
-      DEPTH(const D & domain):domain_(domain);
+      DEPTH(const D & domain):domain_(domain){};
 
       // setters
       void set_locations(const DMatrix<double> &  locations){  locations_ =  locations ; }
@@ -186,7 +186,7 @@ namespace fdapde {
       void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
       //void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Provides phi function used to evaluate the IFD phi in the nodes of the functions
       void set_depth_types(const DVector<std::string> & depth_types ) { depth_types_ = depth_types; }
-      void set_pred_depth_types(const DVector<std::string> & depth_types ) { pred_depth_types_ = pred_depth_types; }
+      void set_pred_depth_types(const DVector<std::string> & depth_types ) { pred_depth_types_ = depth_types; }
       void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; } // Functions used for fitting and IFDs computation   
       void set_voronoi_r_pred(const DMatrix<double> &  voronoi_r_pred ) { return voronoi_r_pred_ =  voronoi_r_pred; } // Functions used for IFD prediction
       //void set_df_fit( const BlockFrame<double> & df_fit ) { df_fit_ = df_fit ; } // We will set something different from R_DEPTH
@@ -230,7 +230,7 @@ namespace fdapde {
 	observation_density_vector_.resize(voronoi_.n_cells());
 	for (std::size_t i; i<voronoi_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
 	  auto obs_element = Voronoi_NA_fit_.col(i);
-	  observation_density_vector_[i] = n_train - obs_element.sum(); // Check wether this is present or not // Be careful of what is bringing nside the Voronoi_NA_fit part: is it counting the NA or the present ones?
+	  observation_density_vector_(i) = n_train - obs_element.sum(); // Check wether this is present or not // Be careful of what is bringing nside the Voronoi_NA_fit part: is it counting the NA or the present ones?
 	}
 	observation_density_vector_ = observation_density_vector_ / n_train; // Here I should count the present ones!!!
 	return; 
@@ -257,8 +257,8 @@ namespace fdapde {
 	//pred_tot_NA.firstRows(n_train) = Vornoy_fit_NA;
 	//pred_tot_NA.lastRows(n_pred) = Vornoy_pred_NA;
 	
-	//DepthSolver solver (this->voronoi_r_fit_, this->Voronoi_NA_fit_, pred_tot,  pred_tot_NA); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
-	DepthSolver solver (this->voronoi_r_fit_, this->Voronoi_NA_fit_); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
+	//Depth_Solver solver (this->voronoi_r_fit_, this->Voronoi_NA_fit_, pred_tot,  pred_tot_NA); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
+	Depth_Solver solver (this->voronoi_r_fit_, this->Voronoi_NA_fit_); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
 	//solver = sol
       
 	solver.set_pred_data(this->voronoi_r_fit_);
@@ -292,15 +292,15 @@ namespace fdapde {
 	for (std::size_t i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
 	  double measure = this->voronoi_.cell(i).measure();
-	  weight_den = weight_den + measure * this->phi_function_evaluation_[i];
+	  weight_den = weight_den + measure * this->phi_function_evaluation_(i);
       
 	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
       
-	    std::string type = depth_types_[j];
+	    std::string type = depth_types_(j);
       
 	    switch(type) {
 	    case "MBD":
-	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_[i];
+	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
 	      
 	      break;
 	    
@@ -310,7 +310,7 @@ namespace fdapde {
 	      break;
 	    
 	    case "MHRD":
-	      DMatrix MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_[i]; // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
+	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1);
 	      point_aux = MHRD_solution.lastCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
             
@@ -336,11 +336,11 @@ namespace fdapde {
 	}
 	
 	for(std::size_t j=0; j < this->depth_types_.size();j++){ 
-	  if(depth_types_[j]=="MHRD"){// The minimum between epigraph and hipograph indices
+	  if(depth_types_(j)=="MHRD"){// The minimum between epigraph and hipograph indices
 	    IFD_fit_.col(j) = std::min(aux_fit_.col(1), aux_fit_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	    //IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	  }else{
-	    if(depth_types_[j]=="MBD"){
+	    if(depth_types_(j)=="MBD"){
 	      IFD_fit_.col(j) = IFD_fit_.col(j) / weight_den;
 	      //IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
 	    }
@@ -356,8 +356,8 @@ namespace fdapde {
       
       void predict() {
 	// Get the useful numbers
-	std::size_t n_train = this->train_functions_.size()[1];
-	std::size_t n_pred = this->pred_functions_.size()[1];
+	std::size_t n_train = this->train_functions_.rows();
+	std::size_t n_pred = this->pred_functions_.cols();
 	std::size_t n_loc = this->locations_.size();
 	std::size_t n_nodes = this->domain_.get_n_nodes(); 
       
@@ -384,15 +384,15 @@ namespace fdapde {
 	for (std::size_t i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
 	  double measure = 1 // still not existing (this->domain_.get_element(i)).get_measure;
-	    weight_den = weight_den + measure * this->phi_function_evaluation_[i];
+	    weight_den = weight_den + measure * this->phi_function_evaluation_(i);
       
 	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
       
-	    std::string type = depth_types_[j];
+	    std::string type = depth_types_(j);
       
 	    switch(type) {
 	    case "MBD":
-	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_[i];
+	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
 	      
 	      break;
 	    
@@ -402,7 +402,7 @@ namespace fdapde {
 	      break;
 	    
 	    case "MHRD":
-	      DMatrix MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_[i]; // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
+	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1); 
 	      point_aux = MHRD_solution.lastCols(2);
             
@@ -423,10 +423,10 @@ namespace fdapde {
 	}
 	
 	for(std::size_t j=0; j < this->depth_types_.size();j++){ 
-	  if(depth_types_[j]=="MHRD"){// The minimum between epigraph and hipograph indices
+	  if(depth_types_(j)=="MHRD"){// The minimum between epigraph and hipograph indices
 	    IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	  }else{
-	    if(depth_types_[j]=="MBD"){
+	    if(depth_types_(j)=="MBD"){
 	      IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
 	    }
 	  }
@@ -466,7 +466,7 @@ namespace fdapde {
       // initialization methods
       void compute_voronoi_representation_fit(){
 	// Implementation up to 30/04/24, to be updated when new syntax is available
-	std::size_t n_train = this->train_functions_.size()[1];
+	std::size_t n_train = this->train_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
 	std::size_t n_nodes = this->voronoi_.get_n_cells();
 	
@@ -484,9 +484,9 @@ namespace fdapde {
 	// initialization
 	for(auto i = 0; i< n_train; i++){
 	  for(auto j =0; j< n_nodes; j++){  
-	    voronoi_r_fit_[i,j] = 0;
-	    Voronoi_NA_fit_[i,j] = true;
-	    Count_Train_cells[i,j] = 0;
+	    voronoi_r_fit_(i,j) = 0;
+	    Voronoi_NA_fit_(i,j) = true;
+	    Count_Train_cells(i,j) = 0;
 	  }
 	}
 	
@@ -495,11 +495,11 @@ namespace fdapde {
 	// Filling the coefficients matrices for fit functions
 	for (auto i =0; i< n_train; i++){
 	  for(auto j=0; j< n_loc; j++){
-	    if(!train_NA_matrix_[i,j]){
-	      aux_index = locations_in_cells[j];
-	      Count_Train_cells[i,aux_index]++;
-	      Voronoi_NA_fit_[i,aux_index] = false;
-	      voronoi_r_fit_[i,aux_index] = voronoi_r_fit_[i,aux_index] + train_functions_[i,j];
+	    if(!train_NA_matrix_(i,j)){
+	      aux_index = locations_in_cells(j);
+	      Count_Train_cells(i,aux_index)++;
+	      Voronoi_NA_fit_(i,aux_index) = false;
+	      voronoi_r_fit_(i,aux_index) = voronoi_r_fit_(i,aux_index) + train_functions_(i,j);
 	    }
 	  }
 	}
@@ -507,8 +507,8 @@ namespace fdapde {
 	// compute the averages
 	for(auto i = 0; i< n_train; i++){
 	  for(auto j =0; j< n_nodes; j++){  
-	    if(Count_Train_cells[i,j]!=0){
-	      voronoi_r_fit_[i,j] = voronoi_r_fit_[i,j]/Count_Train_cells[i,j];
+	    if(Count_Train_cells(i,j)!=0){
+	      voronoi_r_fit_(i,j) = voronoi_r_fit_(i,j)/Count_Train_cells(i,j);
 	    }
 	  }
 	}
@@ -518,7 +518,7 @@ namespace fdapde {
     
       void compute_voronoi_representation_pred(){
 	// Implementation up to 30/04/24, to be updated when new syntax is available
-	std::size_t n_pred = this->pred_functions_.size()[1];
+	std::size_t n_pred = this->pred_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
 	std::size_t n_nodes = this->voronoi_.get_n_cells();
 	
@@ -536,9 +536,9 @@ namespace fdapde {
 	// initialization
 	for(auto i = 0; i< n_pred; i++){
 	  for(auto j =0; j< n_nodes; j++){
-	    voronoi_r_pred_[i,j] = 0;
-	    Voronoi_NA_pred_[i,j] = true;
-	    Count_Pred_cells[i,j] = 0;
+	    voronoi_r_pred_(i,j) = 0;
+	    Voronoi_NA_pred_(i,j) = true;
+	    Count_Pred_cells(i,j) = 0;
 	  }
 	}
 	
@@ -547,11 +547,11 @@ namespace fdapde {
 	// Filling the coefficients matrices for pred functions
 	for (auto i =0; i< n_pred; i++){
 	  for(auto j=0; j< n_loc; j++){
-	    if(!pred_NA_matrix_[i,j]){
-	      aux_index = locations_in_cells[j];
-	      Count_Pred_cells[i,aux_index]++;
-	      Voronoi_NA_pred_[i,aux_index] = false;
-	      voronoi_r_pred_[i,aux_index] = voronoi_r_pred_[i,aux_index] + train_functions_[i,j];
+	    if(!pred_NA_matrix_(i,j)){
+	      aux_index = locations_in_cells(j);
+	      Count_Pred_cells(i,aux_index)++;
+	      Voronoi_NA_pred_(i,aux_index) = false;
+	      voronoi_r_pred_(i,aux_index) = voronoi_r_pred_(i,aux_index) + train_functions_(i,j);
 	    }
 	  }
 	}
@@ -559,8 +559,8 @@ namespace fdapde {
 	// Compute the averages
 	for(auto i = 0; i< n_pred; i++){
 	  for(auto j =0; j< n_nodes; j++){  
-	    if(Count_Pred_cells[i,j]!=0){
-	      voronoi_r_pred_[i,j] = voronoi_r_pred_[i,j]/Count_pred_cells[i,j];
+	    if(Count_Pred_cells(i,j)!=0){
+	      voronoi_r_pred_(i,j) = voronoi_r_pred_(i,j)/Count_pred_cells(i,j);
 	    }
 	  }
 	}
