@@ -17,5 +17,7 @@
 #ifndef __FDAPDE_FUNCTIONAL_H__
 #define __FDAPDE_FUNCTIONAL_H__
 
+#include "models.h"
+#include "models/functional/depth.h"
 
 #endif // __FDAPDE_FUNCTIONAL_H__
