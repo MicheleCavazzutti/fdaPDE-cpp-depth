@@ -36,7 +36,7 @@ namespace fdapde {
       const DMatrix<double> & fit_data_;
       const DMatrix<bool> & fit_mask_;
       DMatrix<double> pred_data_;
-      Dmatrix<bool> pred_mask_;
+      DMatrix<bool> pred_mask_;
       std::size_t n_train;
       std::size_t n_pred;
       std::size_t n_nodes;
@@ -58,25 +58,25 @@ namespace fdapde {
 	}
 
         for(std::size_t j =0; j<n_nodes; j++){
-	for(std::size_t i =0; i<n_pred; i++){
-	  if(pred_mask_[i,j]==true){ // Predict datum is NA
-	    rankings[i,j]=n_train;
-	  }else{
-	    std::size_t count_down=0;
-	    for(std::size_t k =0; k<n_train; k++){
-	      if(fit_mask_[k,j]==false && fit_data_[k,j] < pred_data_[i,j]){ // Fit datum is not NA and is lower than the predict datum
-		count_down++;
-	      }else{
+	  for(std::size_t i =0; i<n_pred; i++){
+	    if(pred_mask_[i,j]==true){ // Predict datum is NA
+	      rankings[i,j]=n_train;
+	    }else{
+	      std::size_t count_down=0;
+	      for(std::size_t k =0; k<n_train; k++){
+		if(fit_mask_[k,j]==false && fit_data_[k,j] < pred_data_[i,j]){ // Fit datum is not NA and is lower than the predict datum
+		  count_down++;
+		}else{
+		}
+		rankings[i,j]=count_down;
 	      }
-	      rankings[i,j]=count_down;
 	    }
 	  }
-	  }
 	  for(std::size_t k=0; k< n_train; k++){ // Count the NA in train data
-	  if(fit_mask_[k,j]==true){
-	    this->NA_number[j]++;
-	  }
-	} 
+	    if(fit_mask_[k,j]==true){
+	      this->NA_number[j]++;
+	    }
+	  } 
 	}
 	
 	are_rankings_computed=true;
@@ -148,7 +148,7 @@ namespace fdapde {
 	  this->compute_rankings(); // Compute the rankings of the data to be evaluated ( that may involve both the single fit or the single pred) data w.r.t. the fit data already encoded.
 	}
               
-	DVector result;
+	DVector<double> result;
 	result.resize(n_pred);
 	
 	for(std::size_t i = 0; i< n_pred;){
@@ -169,7 +169,7 @@ namespace fdapde {
     public:
       using SpaceDomainType = D;          					// triangulated spatial domain
       using Voronoi_tessellation = fdapde::core::Voronoi<SpaceDomainType>;    	// Voronoi tessellation of the spatial domain
-      using Base::df_;                    					// BlockFrame for problem's data storage
+      //using Base::df_;                    					// BlockFrame for problem's data storage
       
       static constexpr int M = SpaceDomainType::local_dimension;      		// Not really required
       static constexpr int N = SpaceDomainType::embedding_dimension;
@@ -184,13 +184,13 @@ namespace fdapde {
       void set_train_NA_matrix(const DMatrix<bool> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
       void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
       void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
-      void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Provides phi function used to evaluate the IFD phi in the nodes of the functions
-      void set_depth_types(const Dvector<std::string> & depth_types ) { depth_types_ = depth_types; }
-      void set_pred_depth_types(const Dvector<std::string> & depth_types ) { pred_depth_types_ = pred_depth_types; }
+      //void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Provides phi function used to evaluate the IFD phi in the nodes of the functions
+      void set_depth_types(const DVector<std::string> & depth_types ) { depth_types_ = depth_types; }
+      void set_pred_depth_types(const DVector<std::string> & depth_types ) { pred_depth_types_ = pred_depth_types; }
       void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; } // Functions used for fitting and IFDs computation   
       void set_voronoi_r_pred(const DMatrix<double> &  voronoi_r_pred ) { return voronoi_r_pred_ =  voronoi_r_pred; } // Functions used for IFD prediction
-      void set_df_fit( const BlockFrame<double> & df_fit ) { df_fit_ = df_fit ; } // We will set something different from R_DEPTH
-      void set_df_pred( const BlockFrame<double> & df_pred ) { df_pred_ = df_pred ; } // Contain various auxiliary outputs
+      //void set_df_fit( const BlockFrame<double> & df_fit ) { df_fit_ = df_fit ; } // We will set something different from R_DEPTH
+      //void set_df_pred( const BlockFrame<double> & df_pred ) { df_pred_ = df_pred ; } // Contain various auxiliary outputs
       void set_IFD_fit(const DMatrix<double> & IFD_fit ) { IFD_fit_ = IFD_fit; }
       void set_IFD_pred(const DMatrix<double> & IFD_pred ) { IFD_pred_ = IFD_pred; }
 
@@ -204,13 +204,13 @@ namespace fdapde {
       const SpaceDomainType & domain() const { return domain_; } // Returns the domain used by the method, from which also locations can be accessed
       const Voronoi_tessellation & voronoi() const { return voronoi_; } // Returns the voronoi tessellation used by the method, from which also locations, cells and measures can be accessed
       const DMatrix<double> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
-      const Dvector<std::string> & depth_types() const { return depth_types_; }
+      const DVector<std::string> & depth_types() const { return depth_types_; }
       const DMatrix<double> & voronoi_r_fit() const { return voronoi_r_fit_; } // Functions used for fitting and IFDs computation  
       const DMatrix<bool> & Voronoi_fit_NA() const { return Voronoi_NA_fit_; } 
       const DMatrix<double> & voronoi_r_pred() const { return voronoi_r_pred_; } // Functions used for IFD prediction
       const DMatrix<bool> & Vornoy_pred_NA() const { return Voronoi_NA_pred_; } 
-      const BlockFrame<double> & df_fit() const { return df_fit_; } // Contain various auxiliary outputs
-      const BlockFrame<double> & df_pred() const { return df_pred_; } // Contain various auxiliary outputs
+      //const BlockFrame<double> & df_fit() const { return df_fit_; } // Contain various auxiliary outputs
+      //const BlockFrame<double> & df_pred() const { return df_pred_; } // Contain various auxiliary outputs
       const DMatrix<double> & IFD_fit() const { return IFD_fit_; }
       const DMatrix<double> & IFD_pred() const { return IFD_pred_; }
       
@@ -448,7 +448,7 @@ namespace fdapde {
       DVector<double> observation_density_vector_; 	// This matrix contains the estimated density of the observational process in the Voronoi cells. Is filled after init() has been called. Dimension n_train x n_nodes
       DMatrix<double> pred_functions_; 			// Functional data on which will be computed the IFDs with respect to the train functions. Do not modify the empirical measures. Dimension: n_pred x n_loc
       DMatrix<bool> pred_NA_matrix_;    // Binary matrix containing the missing data pattern derived from the pred functions, used to compute the empirical densisty of the observational process. Dimension n_tain x n_loc
-      DMatrix<double> phi_function_evaluation_: 	// This matrix contains the evaluation of the phi function produced in R. Is filled only after the initialization of the model
+      DMatrix<double> phi_function_evaluation_; 	// This matrix contains the evaluation of the phi function produced in R. Is filled only after the initialization of the model
       DVector<std::string> depth_types_; 		// Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
       DVector<std::string> pred_depth_types_; 		// Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
       DMatrix<double> voronoi_r_fit_; 			// Voronoi values for the fit functions. Dimension: n_train x n_nodes
@@ -456,8 +456,8 @@ namespace fdapde {
       DMatrix<double> voronoi_r_pred_; 			// Voronoi values for the predict functions. Dimension: n_predict x n_nodes
       DMatrix<bool> Voronoi_NA_pred_;   // Binary matrix containing the missing data pattern for the voronoi representation of the pred functions. Dimension n_tain x n_nodes
       Depth_Solver solver; 				// Machine that computes the point depth when required in solve(). Is initialized in solve, but is also avalable for prediction.
-      BlockFrame<double> df_fit_;   	   		// blockframe that contains the output for the fit functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
-      BlockFrame<double> df_pred_;      		// blockframe that contains the output for the predict functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
+      //BlockFrame<double> df_fit_;   	   		// blockframe that contains the output for the fit functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
+      //BlockFrame<double> df_pred_;      		// blockframe that contains the output for the predict functions. In order: Median, Q1, Q3, UpperFence, LowerFence, MEI, MHO
       DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x univariate_depth_types.size()
       DMatrix<double> IFD_pred_; 			// Integrated functional depth for predict functions. Dimension: n_pred x univariate_depth_types.size()
       DMatrix<double> aux_fit_; 			// Auxiliary depth indices for fit functions. Dimension: n_train x univariate_depth_types.size()
@@ -566,11 +566,13 @@ namespace fdapde {
 	}
 	
 	return;
-      };
+      }
+      
+    };
     
     
-    }   // namespace models
-  }   // namespace fdapde
+  }   // namespace models
+}   // namespace fdapde
 
 
 
