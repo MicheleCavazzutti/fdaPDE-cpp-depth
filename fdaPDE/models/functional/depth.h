@@ -402,26 +402,29 @@ namespace fdapde {
       
 	    switch(type) {
 	    case 1: // MBD
+	     {
 	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
-	      
+	     }
 	      break;
 	    
 	    case 2: // FMD
+	      {
 	      point_depth.col(j) = solver.compute_FMD(i);
-	      
+	      }
 	      break;
 	    
 	    case 3: // MHRD
+	      {
 	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1); 
 	      point_aux = MHRD_solution.rightCols(2);
             
 	      aux_pred_ = aux_pred_ + point_aux*measure;
-
+	      }
 	      break;
 	    
 	    default:
-	      
+	      {}
 	      break;
 	    }
       
@@ -480,10 +483,10 @@ namespace fdapde {
 	// Implementation up to 30/04/24, to be updated when new syntax is available
 	std::size_t n_train = this->train_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->voronoi_.n_cells();
+	std::size_t n_nodes = this->domain_.n_nodes();
 	
 	// Locate the locations (union of the single functions locations) with respect to the voronoi cells. This step is computationally heavy (store it also for predict??? THINK ABOUT THIS)
-	DVector<std::size_t> locations_in_cells = voronoi_.locate(locations_);
+	DVector<int> locations_in_cells = voronoi_.locate(locations_);
 	
 	// Create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
 	DMatrix<int> Count_Train_cells;
@@ -502,7 +505,7 @@ namespace fdapde {
 	  }
 	}
 	
-	std::size_t aux_index;
+	int aux_index;
 	
 	// Filling the coefficients matrices for fit functions
 	for (auto i =0; i< n_train; i++){
@@ -532,10 +535,10 @@ namespace fdapde {
 	// Implementation up to 30/04/24, to be updated when new syntax is available
 	std::size_t n_pred = this->pred_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->voronoi_.n_cells();
+	std::size_t n_nodes = this->domain_.n_nodes();
 	
 	// Locate the locations (union of the single functions locations) with respect to the voronoi cells. This step is computationally heavy
-	DVector<std::size_t> locations_in_cells = voronoi_.locate(locations_);
+	DVector<int> locations_in_cells = voronoi_.locate(locations_);
 	
 	// Create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
 	DMatrix<int> Count_Pred_cells;
@@ -554,7 +557,7 @@ namespace fdapde {
 	  }
 	}
 	
-	std::size_t aux_index;
+	int aux_index;
 	
 	// Filling the coefficients matrices for pred functions
 	for (auto i =0; i< n_pred; i++){
