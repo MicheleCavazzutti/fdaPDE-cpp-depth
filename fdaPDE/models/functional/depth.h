@@ -174,7 +174,7 @@ namespace fdapde {
       static constexpr int M = SpaceDomainType::local_dimension;      		// Not really required
       static constexpr int N = SpaceDomainType::embedding_dimension;
 
-      //DEPTH() = default; // Check
+      DEPTH() = default; // Check
       // constructor that takes as imput the mesh and other tools defined in the models
       DEPTH(const D & domain):domain_(domain){};
 
@@ -299,30 +299,35 @@ namespace fdapde {
 	    int type = depth_types_(j);
       
 	    switch(type) {
-	    case type==1: //MBD
-	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	    case 1: //MBD
+	      {
+		point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
 	      
+	      }
+	      break;
+	      
+	    case 2: // FMD
+	      {
+		point_depth.col(j) = solver.compute_FMD(i);
+	      }  
 	      break;
 	    
-	    case type==2: // FMD
-	      point_depth.col(j) = solver.compute_FMD(i);
-	      
-	      break;
-	    
-	    case type==3: // MHRD
-	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
-	      point_depth.col(j) = MHRD_solution.col(1);
-	      point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
+	    case 3: // MHRD
+	      {
+		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
+		point_depth.col(j) = MHRD_solution.col(1);
+		point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
             
-	      //aux_fit_ = aux_fit_ + point_aux.firstRows(n_train)*measure;
-	      aux_fit_ = aux_fit_ + point_aux*measure;
-	      //aux_pred_ = pred_fit_ + point_aux.lastRows(n_pred)*measure;
-	      
+		//aux_fit_ = aux_fit_ + point_aux.firstRows(n_train)*measure;
+		aux_fit_ = aux_fit_ + point_aux*measure;
+		//aux_pred_ = pred_fit_ + point_aux.lastRows(n_pred)*measure;
+	      }  
 	      break;
 	    
 	    default:
-	      
+	      {} 
 	      break;
+	     
 	    }
       
       
@@ -339,8 +344,8 @@ namespace fdapde {
 	  if(depth_types_(j)==3){// 3==MHRD The minimum between epigraph and hipograph indices
 	    // Fill the MHRD column with the minimum between between MEPI and MIPO. Note: check wether min is before or after integral!!!
 	    for(auto k=0; k< n_train; k++){ // for every functional datum
-	    IFD_fit_(k,j) = std::min(aux_fit_(k,1), aux_fit_(k,2)) / weight_den;  // Check that the std::min are appropriate in vector!!
-	    //IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
+	      IFD_fit_(k,j) = std::min(aux_fit_(k,1), aux_fit_(k,2)) / weight_den;  // Check that the std::min are appropriate in vector!!
+	      //IFD_pred_.col(j) = std::min(aux_pred_.col(1), aux_pred_.col(2)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	    }
 	  }else{
 	    if(depth_types_(j)==1){ // 1==MBD
@@ -389,24 +394,24 @@ namespace fdapde {
 	for (std::size_t i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
 	  double measure =  this->voronoi_.cell(i).measure();
-	    weight_den = weight_den + measure * this->phi_function_evaluation_(i);
+	  weight_den = weight_den + measure * this->phi_function_evaluation_(i);
       
 	  for (std::size_t j=0; j<this->depth_types_.size(); j++){
       
 	    int type = depth_types_(j);
       
 	    switch(type) {
-	    case type==1: // MBD
+	    case 1: // MBD
 	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
 	      
 	      break;
 	    
-	    case type==2: // FMD
+	    case 2: // FMD
 	      point_depth.col(j) = solver.compute_FMD(i);
 	      
 	      break;
 	    
-	    case type==3: // MHRD
+	    case 3: // MHRD
 	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
 	      point_depth.col(j) = MHRD_solution.col(1); 
 	      point_aux = MHRD_solution.rightCols(2);
@@ -429,8 +434,8 @@ namespace fdapde {
 	
 	for(std::size_t j=0; j < this->depth_types_.size();j++){ 
 	  if(depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
-	  for(auto k =0; k<n_pred; k++){
-	    IFD_pred_(k,j) = std::min(aux_pred_(k,1), aux_pred_(k,2)) / weight_den;  // Check that the std::min are appropriate in vector!!
+	    for(auto k =0; k<n_pred; k++){
+	      IFD_pred_(k,j) = std::min(aux_pred_(k,1), aux_pred_(k,2)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	    }
 	  }else{
 	    if(depth_types_(j)==1){ // 1==MBD
