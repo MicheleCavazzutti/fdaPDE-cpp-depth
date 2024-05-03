@@ -85,7 +85,7 @@ namespace fdapde {
       }
 
     public:
-      Depth_Solver()=default;
+      //Depth_Solver()=default;
       Depth_Solver(const DVector<double> & fit_data, const DVector<bool> & fit_mask): fit_data_(fit_data), fit_mask_(fit_mask){
 	n_train = fit_data_.rows();
 	n_nodes = fit_data_.cols();	
@@ -174,7 +174,7 @@ namespace fdapde {
       static constexpr int M = SpaceDomainType::local_dimension;      		// Not really required
       static constexpr int N = SpaceDomainType::embedding_dimension;
 
-      DEPTH() = default; // Check
+      //DEPTH() = default; // Check
       // constructor that takes as imput the mesh and other tools defined in the models
       DEPTH(const D & domain):domain_(domain){};
 
@@ -184,7 +184,7 @@ namespace fdapde {
       void set_train_NA_matrix(const DMatrix<bool> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
       void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
       void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } // Check that a matrix of bools can be copied inside a BinaryMatrix
-      //void set_phi_function(std::function phi_function ) { phi_function_ = phi_function; } // Provides phi function used to evaluate the IFD phi in the nodes of the functions
+      void set_phi_function_evaluation(const DMatrix<double> & phi_function_evaluation ) { phi_function_evaluation_ = phi_function_evaluation;} // Set phi evaluation from R ( storing phi function)
       void set_depth_types(const DVector<std::string> & depth_types ) { depth_types_ = depth_types; }
       void set_pred_depth_types(const DVector<std::string> & depth_types ) { pred_depth_types_ = depth_types; }
       void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; } // Functions used for fitting and IFDs computation   
@@ -218,7 +218,7 @@ namespace fdapde {
       void init() { // Initialization routine, prepares the environment for the solution of the problem.
 	// Compute voroni tessellation of the model (for the moment on <2,2>, <1,1> meshes are available)
 	Voronoi_tessellation voronoi(domain_); // In future we will need to understand whether to store this object this way or not, maybe in initializztion of the problem
-	this->voronoi_() = voronoi; // Save the object in the internal memory for future use
+	this->voronoi_ = voronoi; // Save the object in the internal memory for future use
       
 	// At first compute the Voronoi representation of data
 	this->compute_voronoi_representation_fit();  // This needs to be done after the voronoi has been computed.
@@ -242,7 +242,7 @@ namespace fdapde {
 	std::size_t n_train = this->train_functions_.rows();
 	std::size_t n_pred = this->pred_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->voronoi_.get_n_cells(); 
+	std::size_t n_nodes = this->voronoi_.n_cells(); 
 	
 	// Remark: this is not really needed. In future we will have also the predict methods, so this is not really needed. 
 	// Create the matrices that will contain the overall pred data
@@ -359,7 +359,7 @@ namespace fdapde {
 	std::size_t n_train = this->train_functions_.rows();
 	std::size_t n_pred = this->pred_functions_.cols();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->domain_.get_n_nodes(); 
+	std::size_t n_nodes = this->domain_.n_nodes(); 
       
 	solver.set_pred_data(this->voronoi_r_pred_);
 	solver.set_pred_mask(this->Voronoi_NA_pred_);
@@ -468,7 +468,7 @@ namespace fdapde {
 	// Implementation up to 30/04/24, to be updated when new syntax is available
 	std::size_t n_train = this->train_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->voronoi_.get_n_cells();
+	std::size_t n_nodes = this->voronoi_.n_cells();
 	
 	// Locate the locations (union of the single functions locations) with respect to the voronoi cells. This step is computationally heavy (store it also for predict??? THINK ABOUT THIS)
 	DVector<std::size_t> locations_in_cells = voronoi_.locate(locations_);
@@ -520,7 +520,7 @@ namespace fdapde {
 	// Implementation up to 30/04/24, to be updated when new syntax is available
 	std::size_t n_pred = this->pred_functions_.rows();
 	std::size_t n_loc = this->locations_.size();
-	std::size_t n_nodes = this->voronoi_.get_n_cells();
+	std::size_t n_nodes = this->voronoi_.n_cells();
 	
 	// Locate the locations (union of the single functions locations) with respect to the voronoi cells. This step is computationally heavy
 	DVector<std::size_t> locations_in_cells = voronoi_.locate(locations_);
