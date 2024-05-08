@@ -126,6 +126,13 @@ namespace fdapde {
       
 	DMatrix<double> result;
 	result.resize(n_pred,3);
+	
+	//initialization
+	for(auto i = 0; i< n_pred; i++){
+	  result(i,0) = 0;
+	  result(i,1) = 0;
+	  result(i,2) = 0;
+	}
       
 	for(auto i = 0; i< n_pred; i++){
 	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
@@ -228,7 +235,7 @@ namespace fdapde {
 	// This cycle needs to be modified in light of the Voronoi syntax
 	int n_train = train_functions_.rows();
 	observation_density_vector_.resize(voronoi_.n_cells());
-	for (auto i; i<voronoi_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
+	for (auto i=0; i<voronoi_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
 	  auto obs_element = Voronoi_NA_fit_.col(i);
 	  observation_density_vector_(i) = n_train - obs_element.count(); // Check wether this is present or not // Be careful of what is bringing nside the Voronoi_NA_fit part: is it counting the NA or the present ones?
 	}
@@ -286,13 +293,37 @@ namespace fdapde {
 	point_depth.resize(n_train, this->depth_types_.size()); // this will contain the point depth, computed for each voronoi element, for each element 
 	point_aux.resize(n_train, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
 	
+	//initialization
+	for (auto i =0; i < n_train; i++){
+	  aux_fit_(i,0) = 0;
+	  aux_fit_(i,1) = 0;
+	  point_aux(i,0) = 0;
+	  point_aux(i,1) = 0;
+	  for(auto j =0 ; j<this->depth_types_.size(); j++){
+	    IFD_fit_(i,j)=0;
+	    point_depth(i,j)=0;
+	  }
+ 	}
+	
 	// Weighting function denominator
-	double weight_den = 0;
+	DVector<double> weight_den;
+	double measure_den = 0;
+	
+	// Initialization 
+	weight_den.resize(n_train);
+	for(auto i = 0; i< n_train; i++){
+	  weight_den(i)=0;
+	}
       
 	for (auto i=0; i<n_nodes; i++){
 	  // Check the notion form Alessandro
 	  double measure = this->voronoi_.cell(i).measure();
-	  weight_den = weight_den + measure * this->phi_function_evaluation_(i);
+
+	  for(auto k =0; k<n_train; k++){
+	    if(!Voronoi_NA_fit_(k,i)){
+	      weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
+	    }
+	  }
       
 	  for (auto j=0; j<this->depth_types_.size(); j++){
       
@@ -340,17 +371,21 @@ namespace fdapde {
       
 	}
 	
+	// ERROR HERE, I need to divide each depth for its specific weight den, that is function specific (n_train, n_nodes)
+	
 	for(auto j=0; j < this->depth_types_.size();j++){ 
 	  if(depth_types_(j)==3){// 3==MHRD The minimum between epigraph and hipograph indices
 	    // Fill the MHRD column with the minimum between between MEPI and MIPO. Note: check wether min is before or after integral!!!
 	    for(auto k=0; k< n_train; k++){ // for every functional datum
-	      IFD_fit_(k,j) = std::min(aux_fit_(k,0), aux_fit_(k,1)) / weight_den;  // Check that the std::min are appropriate in vector!!
+	      IFD_fit_(k,j) = std::min(aux_fit_(k,0), aux_fit_(k,1)) / weight_den(k);  // Check that the std::min are appropriate in vector!!
 	      //IFD_pred_.col(j) = std::min(aux_pred_.col(0), aux_pred_.col(1)) / weight_den;  // Check that the std::min are appropriate in vector!!
 	    }
 	  }else{
 	    if(depth_types_(j)==1){ // 1==MBD
-	      IFD_fit_.col(j) = IFD_fit_.col(j) / weight_den;
-	      //IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
+	      for(auto k=0; k< n_train; k++){ // for every functional datum
+		IFD_fit_(k,j) = IFD_fit_(k,j) / weight_den(k);
+		//IFD_pred_.col(j) = IFD_fit_.col(j)  / weight_den;
+	      }
 	    }
 	  }
 	}
@@ -402,24 +437,24 @@ namespace fdapde {
       
 	    switch(type) {
 	    case 1: // MBD
-	     {
-	      point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
-	     }
+	      {
+		point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	      }
 	      break;
 	    
 	    case 2: // FMD
 	      {
-	      point_depth.col(j) = solver.compute_FMD(i);
+		point_depth.col(j) = solver.compute_FMD(i);
 	      }
 	      break;
 	    
 	    case 3: // MHRD
 	      {
-	      DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
-	      point_depth.col(j) = MHRD_solution.col(0); 
-	      point_aux = MHRD_solution.rightCols(2);
+		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will overwritten afterwards.
+		point_depth.col(j) = MHRD_solution.col(0); 
+		point_aux = MHRD_solution.rightCols(2);
             
-	      aux_pred_ = aux_pred_ + point_aux*measure;
+		aux_pred_ = aux_pred_ + point_aux*measure;
 	      }
 	      break;
 	    
