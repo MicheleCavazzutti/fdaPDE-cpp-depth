@@ -131,7 +131,7 @@ namespace fdapde {
       
 	for(auto i = 0; i< n_pred; i++){
 	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
-	    result(i,1) = (double) (this->n_train - this->NA_number(j) - rankings(i,j) - 1 )/(double) (this->n_train - this->NA_number(j)); // Hepigraph
+	    result(i,1) = (double) (this->n_train - this->NA_number(j) - rankings(i,j) - 1 )/(double) (this->n_train - this->NA_number(j)); // Epigraph
 	    result(i,2) = (double) (this->rankings(i,j))/(double) (this->n_train - this->NA_number(j)) ; // Hipograph
 	    result(i,0) = std::min(result(i,1), result(i,2)); // MHRD local (discarded, but may be useful afterwards)
 	  }
@@ -208,14 +208,27 @@ namespace fdapde {
       const DMatrix<bool> & pred_NA_pattern() const { return pred_NA_matrix_; }
       const DVector<double> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
       
-      const DVector<double> & get_density_vector(){return observation_density_vector_; }
+      const DVector<double> & density_vector(){return observation_density_vector_; }
       const DMatrix<double> & voronoi_r_fit() const { return voronoi_r_fit_; }  
       const DMatrix<bool> & voronoi_fit_NA() const { return voronoi_NA_fit_; } 
       const DMatrix<double> & voronoi_r_pred() const { return voronoi_r_pred_; }
       const DMatrix<bool> & vornoy_pred_NA() const { return voronoi_NA_pred_; } 
       
       const DMatrix<double> & IFD_fit() const { return IFD_fit_; }
-      const DMatrix<double> & IFD_pred() const { return IFD_pred_; }
+      const DMatrix<double> & IFD_pred() const { return IFD_pred_; } 
+      const DVector<double> & mepi_fit() const { return mepi_fit_; }
+      const DVector<double> & mhypo_fit() const { return mhypo_fit_; }
+      const DVector<double> & mepi_pred() const { return mepi_pred_; }
+      const DVector<double> & mhypo_pred() const { return mhypo_pred_; }
+      
+      const DMatrix<double> & medians() const { return medians_;} 			
+      const DMatrix<bool> & medians_NA() const { return medians_NA_; } 		
+      const DMatrix<double> & first_quartile() const { return first_quartile_; }
+      const DMatrix<double> & third_quartile() const { return third_quartile_; } 		        
+      const DMatrix<double> & up_whisker() const { return up_whisker_; }	        
+      const DMatrix<double> & low_whisker() const { return low_whisker_; } 		        
+      const DMatrix<bool> & outliers() const { return outliers_; }                       
+      
       
       
       void init() { // Initialization routine, prepares the environment for the solution of the problem.
@@ -249,7 +262,8 @@ namespace fdapde {
 	solver.set_pred_mask(this->voronoi_NA_fit_);
       
 	this->IFD_fit_.resize(n_train, this->depth_types_.size());
-	this->aux_fit_.resize(n_train,2);
+	this->mepi_fit_.resize(n_train);
+	this->mhypo_fit_.resize(n_train);
       
 	DMatrix<double> point_depth;
 	DMatrix<double> point_aux;
@@ -259,8 +273,8 @@ namespace fdapde {
 	
 	// initialization
 	for (auto i =0; i < n_train; i++){
-	  aux_fit_(i,0) = 0;
-	  aux_fit_(i,1) = 0;
+	  mepi_fit_(i) = 0;
+	  mhypo_fit_(i) = 0;
 	  point_aux(i,0) = 0;
 	  point_aux(i,1) = 0;
 	  for(auto j =0 ; j<this->depth_types_.size(); j++){
@@ -312,7 +326,8 @@ namespace fdapde {
 		point_depth.col(j) = MHRD_solution.col(0);
 		point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
             
-		aux_fit_ = aux_fit_ + point_aux*measure;
+		mepi_fit_ = mepi_fit_ + point_aux.col(0)*measure;
+		mhypo_fit_ = mhypo_fit_ + point_aux.col(1)*measure;
 	      }  
 	      break;
 	    
@@ -334,7 +349,9 @@ namespace fdapde {
 	  if(depth_types_(j)==3){// 3==MHRD The minimum between epigraph and hipograph indices
 	    // fill the MHRD column with the minimum between between MEPI and MIPO. Note: check wether min is before or after integral!!!
 	    for(auto k=0; k< n_train; k++){ // for every functional datum
-	      IFD_fit_(k,j) = std::min(aux_fit_(k,0), aux_fit_(k,1)) / weight_den(k);  // Check that the std::min are appropriate in vector!!
+	      mepi_fit_(k) = mepi_fit_(k) / weight_den(k);
+	      mhypo_fit_(k) = mhypo_fit_(k) / weight_den(k);
+	      IFD_fit_(k,j) = std::min(mepi_fit_(k), mhypo_fit_(k));  // Check that the std::min are appropriate in vector!!
 	    }
 	  }else{
 	    if(depth_types_(j)==1){ // 1==MBD
@@ -344,6 +361,9 @@ namespace fdapde {
 	    }
 	  }
 	}
+	
+	// only for fit functions, one can also compute the functional boxplot quantities. In principle, this may also be done in R, but here is faster
+	this->compute_functional_boxplot();
 
 	return; 
       } 
@@ -362,7 +382,8 @@ namespace fdapde {
 	solver.set_pred_mask(this->voronoi_NA_pred_);
       
 	this->IFD_pred_.resize(n_pred, this->pred_depth_types_.size());
-	this->aux_pred_.resize(n_pred, 2);
+	this->mepi_pred_.resize(n_pred);
+	this->mhypo_pred_.resize(n_pred);
       
 	DMatrix<double> point_depth;
 	DMatrix<double> point_aux;
@@ -372,8 +393,8 @@ namespace fdapde {
 	
 	// initialization
 	for (auto i =0; i < n_pred; i++){
-	  aux_pred_(i,0) = 0;
-	  aux_pred_(i,1) = 0;
+	  mepi_pred_(i) = 0;
+	  mhypo_pred_(i) = 0;
 	  point_aux(i,0) = 0;
 	  point_aux(i,1) = 0;
 	  for(auto j =0 ; j<this->pred_depth_types_.size(); j++){
@@ -425,7 +446,8 @@ namespace fdapde {
 		point_depth.col(j) = MHRD_solution.col(0); 
 		point_aux = MHRD_solution.rightCols(2);
             
-		aux_pred_ = aux_pred_ + point_aux*measure;
+		mepi_pred_ = mepi_pred_ + point_aux.col(0)*measure;
+		mhypo_pred_ = mhypo_pred_ + point_aux.col(1)*measure;
 	      }
 	      break;
 	    
@@ -445,7 +467,9 @@ namespace fdapde {
 	for(auto j=0; j < this->pred_depth_types_.size();j++){ 
 	  if(depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
 	    for(auto k =0; k<n_pred; k++){
-	      IFD_pred_(k,j) = std::min(aux_pred_(k,0), aux_pred_(k,1)) / weight_den(k);
+	      mepi_pred_(k) = mepi_pred_(k) / weight_den(k);
+	      mhypo_pred_(k) = mhypo_pred_(k) / weight_den(k);
+	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k)) / weight_den(k);
 	    }
 	  }else{
 	    if(depth_types_(j)==1){ // 1==MBD
@@ -482,10 +506,21 @@ namespace fdapde {
       DMatrix<bool> voronoi_NA_pred_;                   // Missing data pattern for the voronoi representation of the pred functions. Dimension n_pred x n_nodes
       
       // Output
-      DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x univariate_depth_types.size()
-      DMatrix<double> IFD_pred_; 			// Integrated functional depth for predict functions. Dimension: n_pred x univariate_depth_types.size()
-      DMatrix<double> aux_fit_; 			// Auxiliary depth indices for fit functions. Dimension: n_train x univariate_depth_types.size()
-      DMatrix<double> aux_pred_; 			// Auxiliary depth indices depth for predict functions. Dimension: n_pred x univariate_depth_types.size()
+      DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x depth_types.size()
+      DMatrix<double> IFD_pred_; 			// Integrated functional depth for predict functions. Dimension: n_pred x pred_depth_types.size()
+      DVector<double> mepi_fit_; 			// Modified Epigraph index fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
+      DVector<double> mhypo_fit_; 			// Modified Hypograph index for fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
+      DVector<double> mepi_pred_; 			// Modified Epigraph index pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
+      DVector<double> mhypo_pred_; 			// Modified Hypograph index for pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
+      
+      // Boxplots components 
+      DMatrix<double> medians_; 			// Collection of medians w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<bool> medians_NA_; 			// Collection of medians NA masks w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<double> first_quartile_; 	                // Collection of first_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<double> third_quartile_; 		        // Collection of third_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<double> up_whisker_; 		        // Collection of up_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<double> low_whisker_; 		        // Collection of low_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      DMatrix<bool> outliers_;                           // Collection of outliers boolean values (in C++ notation) w.r.t. Depths Types requested. Dimension: n_train x depth_types.size()
       
       // initialization methods
       void compute_voronoi_representation_fit(){
@@ -592,6 +627,115 @@ namespace fdapde {
 	return;
       }
       
+      void compute_functional_boxplot(){
+      
+	int n_train = voronoi_r_fit_.rows();
+	int n_nodes = voronoi_r_fit_.cols();
+      
+	medians_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	medians_NA_.resize(n_nodes,depth_types_.size());
+	first_quartile_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	third_quartile_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	up_whisker_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	low_whisker_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	
+      
+	outliers_.resize(n_train, depth_types_.size());
+      
+	// initialize outliers matricx
+	for(auto i = 0; i< n_train; i++){
+	  for(auto j=0; j < depth_types_.size(); j++){
+	    outliers_(i,j)=false;
+	  }
+	}
+      
+	for (auto j=0; j < depth_types_.size(); j++){
+      
+	  DVector<double> IFD = IFD_fit_.col(j);
+	  DVector<double> IFD_sorted = IFD; 
+      
+	  // Sort the depths
+	  std::sort(IFD_sorted.begin(), IFD_sorted.end());
+      
+	  double max_depth = IFD_sorted(n_train-1); // maximum depth
+	  int middle = std::floor(n_train/2); // index that characterizes the minimum depth of the (little more than) 50% of the functions
+	  double middle_depth = IFD_sorted(middle); // minimum depth of the (little more than) central 50% of the functions
+ 	  DVector<int> central_fun_indexes = DVector<int>::Zero(middle); // vector that will store the indices of the central 50% functions
+ 
+	  int count=0;
+      
+	  // fill median, identify central functions, initialize the quartiles
+	  for(auto i = 0; i<n_train && count < middle; i++){
+	    if(IFD(i)>=middle_depth){ // If depth is higher than the threshold, add the function to the central 50% ones
+	      //central_block.row(count) = voronoi_r_fit_.row(i);
+	      central_fun_indexes(count)=i;
+	      count++;
+	    }
+	    if(IFD(i) == max_depth){
+	      medians_.col(j) = voronoi_r_fit_.row(i);
+	      medians_NA_.col(j) = voronoi_NA_fit_.row(i);
+	      first_quartile_.col(j) = voronoi_r_fit_.row(i); //NO this way we are not handling well the possibly missing 
+	      third_quartile_.col(j) = voronoi_r_fit_.row(i);
+	    }
+	  }
+      
+	  // initialization of quartiles: if median is missing we need to select a random value among the central block ones
+	  for(auto i = 0; i < n_nodes; i++){
+	    if(medians_NA_(i,j)){ // median was missing, bad initialization (value 0 may be out of the range available)
+	      bool found=false;
+	      int count=0;
+	      while(!found && count<middle){
+		if(!voronoi_NA_fit_(central_fun_indexes(count), i)){ // The function is not missing in node i
+		  first_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(count),i);
+		  third_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(count),i);
+		  found=true;
+		}
+		count++;
+	      }
+	    }
+	  }
+      
+	  // now compute the quartiles using the central block: envelope of the central 50% functions
+	  for(auto i = 0; i < n_nodes; i++){
+	    for(auto k = 0; k < middle; k++){
+	      if(!voronoi_NA_fit_(central_fun_indexes(k), i)){ // The datum is not missing in the k-th central function
+		if(voronoi_r_fit_(central_fun_indexes(k),i) <= first_quartile_(i,j)){
+		  first_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(k),i);
+		}
+		if(voronoi_r_fit_(central_fun_indexes(k),i) >= third_quartile_(i,j)){
+		  third_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(k),i);
+		}
+           
+	      }
+	    }
+	  }
+      
+	  double IQR;
+      
+	  // Finally fill the whiskers and check outliers
+	  for(auto i = 0; i < n_nodes; i++){
+     
+	    IQR = third_quartile_(i,j) - first_quartile_(i,j);
+	    up_whisker_(i,j) = third_quartile_(i,j) + 1.5*IQR;
+	    low_whisker_(i,j) = first_quartile_(i,j) - 1.5*IQR;
+      
+	    for(auto k=0; k < n_train; k++){
+	      if(!voronoi_NA_fit_(k, i)){ // The datum is not missing in the function of interest
+		if(voronoi_r_fit_(k,i) < low_whisker_(i,j)){
+		  outliers_(k,j) = true;
+		}
+		if(voronoi_r_fit_(k,i) > up_whisker_(i,j)){
+		  outliers_(k,j) = true;
+		}
+           
+	      }
+	    }
+	  }
+	}
+      
+	return;
+      
+      }
     };
     
     
