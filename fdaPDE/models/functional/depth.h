@@ -188,6 +188,7 @@ namespace fdapde {
       void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
       void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } 
       void set_phi_function_evaluation(const DVector<double> & phi_function_evaluation ) { phi_function_evaluation_ = phi_function_evaluation;} 
+      void set_external_voronoi_measures(const DVector<double> & external_voronoi_measures ) { external_voronoi_measures_ = external_voronoi_measures;} 
       
       void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; }
       void set_voronoi_r_pred(const DMatrix<double> &  voronoi_r_pred ) { return voronoi_r_pred_ =  voronoi_r_pred; } 
@@ -207,6 +208,7 @@ namespace fdapde {
       const DMatrix<double> & pred_functions() const { return pred_functions_; }
       const DMatrix<bool> & pred_NA_pattern() const { return pred_NA_matrix_; }
       const DVector<double> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
+      const DVector<double> & external_voronoi_measures() const { return external_voronoi_measures_; } // return the voronoi measures, only for 2.5D sphere
       
       const DVector<double> & density_vector(){return observation_density_vector_; }
       const DMatrix<double> & voronoi_r_fit() const { return voronoi_r_fit_; }  
@@ -295,6 +297,9 @@ namespace fdapde {
 	for (auto i=0; i<n_nodes; i++){
 	  // extract the measure of the Voronoi cell 
 	  double measure = this->voronoi_.cell(i).measure();
+	  if(this->voronoi_.local_dim == 2 && this->voronoi_.local_dim == 3 ){
+	    measure  = this->external_voronoi_measures_[i];
+	  }
 
 	  for(auto k =0; k<n_train; k++){
 	    if(!voronoi_NA_fit_(k,i)){
@@ -416,6 +421,11 @@ namespace fdapde {
 	for (auto i=0; i<n_nodes; i++){
 	  
 	  double measure =  this->voronoi_.cell(i).measure();
+	  
+	  if(this->voronoi_.local_dim == 2 && this->voronoi_.local_dim == 3 ){
+	    measure  = this->external_voronoi_measures_[i];
+	  }
+	  
 	  // compute /int_{O} phi(q(p)) dp
 	  for(auto k =0; k<n_pred; k++){
 	    if(!voronoi_NA_fit_(k,i)){
@@ -497,6 +507,7 @@ namespace fdapde {
       DMatrix<double> pred_functions_; 			// Functional data on which will be computed the IFDs with respect to the train functions. Dimension: n_pred x n_loc
       DMatrix<bool> pred_NA_matrix_;                    // Missing data pattern of the pred functions, used to compute the empirical densisty of the observational process. Dimension n_pred x n_loc
       DVector<double> phi_function_evaluation_; 	// Evaluation of the phi function produced in R. Is filled only after the initialization of the model. Size: n_nodes
+      DVector<double> external_voronoi_measures_; 	// Measures of the voronoi cells associated to each node
       
       // Internal data
       DVector<double> observation_density_vector_; 	// Estimated density of the observational process in the Voronoi cells. Is filled after init() has been called. Dimension n_train x n_nodes
