@@ -297,7 +297,7 @@ namespace fdapde {
 	for (auto i=0; i<n_nodes; i++){
 	  // extract the measure of the Voronoi cell 
 	  double measure = this->voronoi_.cell(i).measure();
-	  if(this->voronoi_.local_dim == 2 && this->voronoi_.local_dim == 3 ){
+	  if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
 	    measure  = this->external_voronoi_measures_[i];
 	  }
 
@@ -422,7 +422,7 @@ namespace fdapde {
 	  
 	  double measure =  this->voronoi_.cell(i).measure();
 	  
-	  if(this->voronoi_.local_dim == 2 && this->voronoi_.local_dim == 3 ){
+	  if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
 	    measure  = this->external_voronoi_measures_[i];
 	  }
 	  
