@@ -155,7 +155,7 @@ namespace fdapde {
 	
 	for(auto i = 0; i< n_pred; i++){
 	  if(this->n_train - this->NA_number(j) - this->rankings(i,j) > 0 ){ // Check, lui non sicuro
-	    result(i) = 1 - (double) (2*(this->rankings(i,j) + 1)-1)/(double) (2*(this->n_train - this->NA_number(j)));
+	    result(i) = 1 - std::abs((double) (this->n_train - this->NA_number(j) - 2*(this->rankings(i,j) + 1)))/(double) (2*(this->n_train - this->NA_number(j)));
 	  }
 	  else{
 	    result(i) = 0;
@@ -285,6 +285,7 @@ namespace fdapde {
 	
 	// weighting function denominator
 	DVector<double> weight_den;
+	double total_measure = 0;
 	
 	// initialization 
 	weight_den.resize(n_train);
@@ -295,6 +296,7 @@ namespace fdapde {
 	for (auto i=0; i<n_nodes; i++){
 	  // extract the measure of the Voronoi cell 
 	  double measure = this->voronoi_.cell(i).measure();
+	  total_measure = total_measure + measure;
 
 	  for(auto k =0; k<n_train; k++){
 	    if(!voronoi_NA_fit_(k,i)){
@@ -358,6 +360,12 @@ namespace fdapde {
 	      for(auto k=0; k< n_train; k++){ // for every functional datum
 		IFD_fit_(k,j) = IFD_fit_(k,j) / weight_den(k);
 	      }
+	    }else{
+	      if(depth_types_(j)==2){ // 2==FMD
+	        for(auto k=0; k< n_train; k++){ // for every functional datum, scale the total depth so that we report to a 1-measure domain (but no weight)
+		  IFD_fit_(k,j) = IFD_fit_(k,j) / total_measure;
+	        }
+	      } 
 	    }
 	  }
 	}
@@ -465,14 +473,14 @@ namespace fdapde {
 	}
 	
 	for(auto j=0; j < this->pred_depth_types_.size();j++){ 
-	  if(depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
+	  if(pred_depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
 	    for(auto k =0; k<n_pred; k++){
 	      mepi_pred_(k) = mepi_pred_(k) / weight_den(k);
 	      mhypo_pred_(k) = mhypo_pred_(k) / weight_den(k);
-	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k)) / weight_den(k);
+	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k));
 	    }
 	  }else{
-	    if(depth_types_(j)==1){ // 1==MBD
+	    if(pred_depth_types_(j)==1){ // 1==MBD
 	      for(auto k=0; k< n_pred; k++){ // for every functional datum
 		IFD_pred_(k,j) = IFD_pred_(k,j) / weight_den(k);
 	      }
