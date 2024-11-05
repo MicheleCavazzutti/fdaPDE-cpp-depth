@@ -413,6 +413,7 @@ namespace fdapde {
 	
 	// weighting function denominator
 	DVector<double> weight_den;
+	double total_measure = 0;
 	
 	// initialization 
 	weight_den.resize(n_pred);
@@ -422,8 +423,9 @@ namespace fdapde {
       
         // compute the intergals summing up the effect of each cell
 	for (auto i=0; i<n_nodes; i++){
-	  
 	  double measure =  this->voronoi_.cell(i).measure();
+	  total_measure = total_measure + measure;
+	  
 	  // compute /int_{O} phi(q(p)) dp
 	  for(auto k =0; k<n_pred; k++){
 	    if(!voronoi_NA_fit_(k,i)){
@@ -484,6 +486,12 @@ namespace fdapde {
 	      for(auto k=0; k< n_pred; k++){ // for every functional datum
 		IFD_pred_(k,j) = IFD_pred_(k,j) / weight_den(k);
 	      }
+	    }else{
+	      if(depth_types_(j)==2){ // 2==FMD
+	        for(auto k=0; k< n_train; k++){ // for every functional datum, scale the total depth so that we report to a 1-measure domain (but no weight)
+		  IFD_fit_(k,j) = IFD_fit_(k,j) / total_measure;
+	        }
+	      } 
 	    }
 	  }
 	}
