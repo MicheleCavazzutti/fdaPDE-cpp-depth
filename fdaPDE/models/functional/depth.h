@@ -489,7 +489,7 @@ namespace fdapde {
 	    }else{
 	      if(depth_types_(j)==2){ // 2==FMD
 	        for(auto k=0; k< n_pred; k++){ // for every functional datum, scale the total depth so that we report to a 1-measure domain (but no weight)
-		  IFD_fit_(k,j) = IFD_fit_(k,j) / total_measure;
+		  IFD_pred_(k,j) = IFD_pred_(k,j) / total_measure;
 	        }
 	      } 
 	    }
