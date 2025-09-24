@@ -17,7 +17,15 @@
 #ifndef __FDAPDE_FUNCTIONAL_H__
 #define __FDAPDE_FUNCTIONAL_H__
 
-#include "models.h"
-#include "models/functional/depth.h"
+// clang-format off
+
+// include core
+#include <fdaPDE/core.h>
+
+#include "solvers.h"
+#include "src/models/fpca.h"
+#include "src/models/depth.h"
+
+// clang-format on
 
 #endif // __FDAPDE_FUNCTIONAL_H__
