@@ -19,8 +19,8 @@
 
 #include "header_check.h"
 
-using fdapde::core::Triangulation;
-using fdapde::core::Voronoi;
+using fdapde::Triangulation;
+using fdapde::Voronoi;
 
 namespace fdapde {
   namespace models {
@@ -28,16 +28,16 @@ namespace fdapde {
     // DEPTH SOLVER CLASS
     class Depth_Solver {
     private:
-      const DMatrix<double> & fit_data_;
-      const DMatrix<bool> & fit_mask_;
-      DMatrix<double> pred_data_;
-      DMatrix<bool> pred_mask_;
+      const Eigen::Matrix<double, Dynamic, Dynamic> & fit_data_;
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & fit_mask_;
+      Eigen::Matrix<double, Dynamic, Dynamic> pred_data_;
+      Eigen::Matrix<bool, Dynamic, Dynamic> pred_mask_;
       int n_train;
       int n_pred;
       int n_nodes;
 
-      DMatrix<int> rankings;
-      DVector<int> NA_number;
+      Eigen::Matrix<int, Dynamic, Dynamic> rankings;
+      Eigen::Matrix<int, Dynamic, 1> NA_number;
 
       bool are_rankings_computed = false; // NBB In prediction put back to false
 
@@ -78,23 +78,23 @@ namespace fdapde {
       }
 
     public:
-      Depth_Solver(const DMatrix<double> & fit_data, const DMatrix<bool> & fit_mask): fit_data_(fit_data), fit_mask_(fit_mask){
+      Depth_Solver(const Eigen::Matrix<double, Dynamic, Dynamic> & fit_data, const Eigen::Matrix<bool, Dynamic, Dynamic> & fit_mask): fit_data_(fit_data), fit_mask_(fit_mask){
 	n_train = fit_data_.rows();
 	n_nodes = fit_data_.cols();	
       }
       
-      void set_pred_data(const DMatrix<double> & pred_data){pred_data_ = pred_data;
+      void set_pred_data(const Eigen::Matrix<double, Dynamic, Dynamic> & pred_data){pred_data_ = pred_data;
 	n_pred = pred_data.rows();
 	are_rankings_computed = false; // NB we need to reset the flag, because we have new preditive data
       }
-      void set_pred_mask(const DMatrix<bool> & pred_mask){pred_mask_ = pred_mask;}
+      void set_pred_mask(const Eigen::Matrix<bool, Dynamic, Dynamic> & pred_mask){pred_mask_ = pred_mask;}
 
-      DVector<double> compute_SD(int j){
+      Eigen::Matrix<double, Dynamic, 1> compute_SD(int j){
 	if(!are_rankings_computed){
 	  this->compute_rankings(); // Compute the rankings of the data to be evaluated ( that may involve both the single fit or the single pred) data w.r.t. the fit data already encoded.
 	}
         
-	DVector<double> result;
+	Eigen::Matrix<double, Dynamic, 1> result;
 	result.resize(n_pred);
       
 	for(auto i = 0; i< n_pred; i++){
@@ -109,12 +109,12 @@ namespace fdapde {
 	return result;
       }
       
-      DMatrix<double> compute_MHRD(int j){
+      Eigen::Matrix<double, Dynamic, Dynamic> compute_MHRD(int j){
 	if(!are_rankings_computed){
 	  this->compute_rankings(); // Compute the rankings of the data to be evaluated ( that may involve both the single fit or the single pred) data w.r.t. the fit data already encoded.
 	}
       
-	DMatrix<double> result;
+	Eigen::Matrix<double, Dynamic, Dynamic> result;
 	result.resize(n_pred,3);
 	
 	//initialization
@@ -140,12 +140,12 @@ namespace fdapde {
 	return result;
       }
     
-      DVector<double> compute_FMD(int j){
+      Eigen::Matrix<double, Dynamic, 1> compute_FMD(int j){
 	if(!are_rankings_computed){
 	  this->compute_rankings(); // Compute the rankings of the data to be evaluated ( that may involve both the single fit or the single pred) data w.r.t. the fit data already encoded.
 	}
               
-	DVector<double> result;
+	Eigen::Matrix<double, Dynamic, 1> result;
 	result.resize(n_pred);
 	
 	for(auto i = 0; i< n_pred; i++){
@@ -165,7 +165,7 @@ namespace fdapde {
     class DEPTH { 								// Interface that will be used in R_Depth.cpp
     public:
       using SpaceDomainType = D;          					// triangulated spatial domain
-      using VoronoiTessellation = fdapde::core::Voronoi<SpaceDomainType>;    	// Voronoi tessellation of the spatial domain
+      using VoronoiTessellation = fdapde::Voronoi<SpaceDomainType>;    	// Voronoi tessellation of the spatial domain
       
       static constexpr int M = SpaceDomainType::local_dimension;      		// Not really required
       static constexpr int N = SpaceDomainType::embedding_dimension;
@@ -175,56 +175,56 @@ namespace fdapde {
       DEPTH(const D & domain):domain_(domain){};
 
       // setters
-      void set_locations(const DMatrix<double> &  locations){  locations_ =  locations ; }
-      void set_depth_types(const DVector<int> & depth_types ) { depth_types_ = depth_types; }
-      void set_pred_depth_types(const DVector<int> & depth_types ) { pred_depth_types_ = depth_types; }
-      void set_train_functions(const DMatrix<double> &  train_functions){  train_functions_ =  train_functions ; }
-      void set_train_NA_matrix(const DMatrix<bool> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } 
-      void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
-      void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } 
-      void set_phi_function_evaluation(const DVector<double> & phi_function_evaluation ) { phi_function_evaluation_ = phi_function_evaluation;} 
-      void set_external_voronoi_measures(const DVector<double> & external_voronoi_measures ) { external_voronoi_measures_ = external_voronoi_measures;} 
+      void set_locations(const Eigen::Matrix<double, Dynamic, Dynamic> &  locations){  locations_ =  locations ; }
+      void set_depth_types(const Eigen::Matrix<int, Dynamic, 1> & depth_types ) { depth_types_ = depth_types; }
+      void set_pred_depth_types(const Eigen::Matrix<int, Dynamic, 1> & depth_types ) { pred_depth_types_ = depth_types; }
+      void set_train_functions(const Eigen::Matrix<double, Dynamic, Dynamic> &  train_functions){  train_functions_ =  train_functions ; }
+      void set_train_NA_matrix(const Eigen::Matrix<bool, Dynamic, Dynamic> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } 
+      void set_pred_functions( const Eigen::Matrix<double, Dynamic, Dynamic> & pred_functions) { pred_functions_ = pred_functions ; }
+      void set_pred_NA_matrix(const Eigen::Matrix<bool, Dynamic, Dynamic> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } 
+      void set_phi_function_evaluation(const Eigen::Matrix<double, Dynamic, 1> & phi_function_evaluation ) { phi_function_evaluation_ = phi_function_evaluation;} 
+      void set_external_voronoi_measures(const Eigen::Matrix<double, Dynamic, 1> & external_voronoi_measures ) { external_voronoi_measures_ = external_voronoi_measures;} 
       
-      void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; }
-      void set_voronoi_r_pred(const DMatrix<double> &  voronoi_r_pred ) { return voronoi_r_pred_ =  voronoi_r_pred; } 
+      void set_voronoi_r_fit(const Eigen::Matrix<double, Dynamic, Dynamic> &  voronoi_r_fit ) { voronoi_r_fit_ =  voronoi_r_fit ; }
+      void set_voronoi_r_pred(const Eigen::Matrix<double, Dynamic, Dynamic> &  voronoi_r_pred ) { voronoi_r_pred_ =  voronoi_r_pred; } 
       
-      void set_IFD_fit(const DMatrix<double> & IFD_fit ) { IFD_fit_ = IFD_fit; }
-      void set_IFD_pred(const DMatrix<double> & IFD_pred ) { IFD_pred_ = IFD_pred; }
+      void set_IFD_fit(const Eigen::Matrix<double, Dynamic, Dynamic> & IFD_fit ) { IFD_fit_ = IFD_fit; }
+      void set_IFD_pred(const Eigen::Matrix<double, Dynamic, Dynamic> & IFD_pred ) { IFD_pred_ = IFD_pred; }
 
       // getters
       const SpaceDomainType & domain() const { return domain_; }                                   // Returns the domain, from which also locations can be accessed
       const VoronoiTessellation & voronoi() const { return voronoi_; }                             // Returns the voronoi tessellation, from which also locations, cells and measures can be accessed
       
-      const DVector<int> & depth_types() const { return depth_types_; }
-      const DVector<int> & pred_depth_types() const { return pred_depth_types_; }
-      const DMatrix<double> & locations() const { return locations_; }
-      const DMatrix<double> & train_functions() const { return train_functions_; }
-      const DMatrix<bool> & train_NA_pattern() const { return train_NA_matrix_; }
-      const DMatrix<double> & pred_functions() const { return pred_functions_; }
-      const DMatrix<bool> & pred_NA_pattern() const { return pred_NA_matrix_; }
-      const DVector<double> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
-      const DVector<double> & external_voronoi_measures() const { return external_voronoi_measures_; } // return the voronoi measures, only for 2.5D sphere
+      const Eigen::Matrix<int, Dynamic, 1> & depth_types() const { return depth_types_; }
+      const Eigen::Matrix<int, Dynamic, 1> & pred_depth_types() const { return pred_depth_types_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & locations() const { return locations_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & train_functions() const { return train_functions_; }
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & train_NA_pattern() const { return train_NA_matrix_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & pred_functions() const { return pred_functions_; }
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & pred_NA_pattern() const { return pred_NA_matrix_; }
+      const Eigen::Matrix<double, Dynamic, 1> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
+      const Eigen::Matrix<double, Dynamic, 1> & external_voronoi_measures() const { return external_voronoi_measures_; } // return the voronoi measures, only for 2.5D sphere
       
-      const DVector<double> & density_vector(){return observation_density_vector_; }
-      const DMatrix<double> & voronoi_r_fit() const { return voronoi_r_fit_; }  
-      const DMatrix<bool> & voronoi_fit_NA() const { return voronoi_NA_fit_; } 
-      const DMatrix<double> & voronoi_r_pred() const { return voronoi_r_pred_; }
-      const DMatrix<bool> & vornoy_pred_NA() const { return voronoi_NA_pred_; } 
+      const Eigen::Matrix<double, Dynamic, 1> & density_vector(){return observation_density_vector_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & voronoi_r_fit() const { return voronoi_r_fit_; }  
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & voronoi_fit_NA() const { return voronoi_NA_fit_; } 
+      const Eigen::Matrix<double, Dynamic, Dynamic> & voronoi_r_pred() const { return voronoi_r_pred_; }
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & vornoy_pred_NA() const { return voronoi_NA_pred_; } 
       
-      const DMatrix<double> & IFD_fit() const { return IFD_fit_; }
-      const DMatrix<double> & IFD_pred() const { return IFD_pred_; } 
-      const DVector<double> & mepi_fit() const { return mepi_fit_; }
-      const DVector<double> & mhypo_fit() const { return mhypo_fit_; }
-      const DVector<double> & mepi_pred() const { return mepi_pred_; }
-      const DVector<double> & mhypo_pred() const { return mhypo_pred_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & IFD_fit() const { return IFD_fit_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & IFD_pred() const { return IFD_pred_; } 
+      const Eigen::Matrix<double, Dynamic, 1> & mepi_fit() const { return mepi_fit_; }
+      const Eigen::Matrix<double, Dynamic, 1> & mhypo_fit() const { return mhypo_fit_; }
+      const Eigen::Matrix<double, Dynamic, 1> & mepi_pred() const { return mepi_pred_; }
+      const Eigen::Matrix<double, Dynamic, 1> & mhypo_pred() const { return mhypo_pred_; }
       
-      const DMatrix<double> & medians() const { return medians_;} 			
-      const DMatrix<bool> & medians_NA() const { return medians_NA_; } 		
-      const DMatrix<double> & first_quartile() const { return first_quartile_; }
-      const DMatrix<double> & third_quartile() const { return third_quartile_; } 		        
-      const DMatrix<double> & up_whisker() const { return up_whisker_; }	        
-      const DMatrix<double> & low_whisker() const { return low_whisker_; } 		        
-      const DMatrix<bool> & outliers() const { return outliers_; }                       
+      const Eigen::Matrix<double, Dynamic, Dynamic> & medians() const { return medians_;} 			
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & medians_NA() const { return medians_NA_; } 		
+      const Eigen::Matrix<double, Dynamic, Dynamic> & first_quartile() const { return first_quartile_; }
+      const Eigen::Matrix<double, Dynamic, Dynamic> & third_quartile() const { return third_quartile_; } 		        
+      const Eigen::Matrix<double, Dynamic, Dynamic> & up_whisker() const { return up_whisker_; }	        
+      const Eigen::Matrix<double, Dynamic, Dynamic> & low_whisker() const { return low_whisker_; } 		        
+      const Eigen::Matrix<bool, Dynamic, Dynamic> & outliers() const { return outliers_; }                       
       
       
       
@@ -262,8 +262,8 @@ namespace fdapde {
 	this->mepi_fit_.resize(n_train);
 	this->mhypo_fit_.resize(n_train);
       
-	DMatrix<double> point_depth;
-	DMatrix<double> point_aux;
+	Eigen::Matrix<double, Dynamic, Dynamic> point_depth;
+	Eigen::Matrix<double, Dynamic, Dynamic> point_aux;
 	
 	point_depth.resize(n_train, this->depth_types_.size()); // this will contain the point depth, computed for each voronoi element, for each element 
 	point_aux.resize(n_train, 2); // this contains the computed point auxiliary indices, such as MEPI or MHYPO
@@ -281,7 +281,7 @@ namespace fdapde {
  	}
 	
 	// weighting function denominator
-	DVector<double> weight_den;
+	Eigen::Matrix<double, Dynamic, 1> weight_den;
 	
 	// initialization 
 	weight_den.resize(n_train);
@@ -326,7 +326,7 @@ namespace fdapde {
 	    
 	    case 3: // MHRD
 	      {
-		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
+		Eigen::Matrix<double, Dynamic, Dynamic> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
 		point_depth.col(j) = MHRD_solution.col(0);
 		point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
             
@@ -389,8 +389,8 @@ namespace fdapde {
 	this->mepi_pred_.resize(n_pred);
 	this->mhypo_pred_.resize(n_pred);
       
-	DMatrix<double> point_depth;
-	DMatrix<double> point_aux;
+	Eigen::Matrix<double, Dynamic, Dynamic> point_depth;
+	Eigen::Matrix<double, Dynamic, Dynamic> point_aux;
 	
 	point_depth.resize(n_pred, this->pred_depth_types_.size()); // this will contain the point depth, computed for each voronoi element, for each element 
 	point_aux.resize(n_pred, 2); // this contains the point-computed auxiliary indices, such as MEPI or MHYPO
@@ -408,7 +408,7 @@ namespace fdapde {
  	}
 	
 	// weighting function denominator
-	DVector<double> weight_den;
+	Eigen::Matrix<double, Dynamic, 1> weight_den;
 	
 	// initialization 
 	weight_den.resize(n_pred);
@@ -451,7 +451,7 @@ namespace fdapde {
 	    
 	    case 3: // MHRD
 	      {
-		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is overwritten afterwards (due to def).
+		Eigen::Matrix<double, Dynamic, Dynamic> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is overwritten afterwards (due to def).
 		point_depth.col(j) = MHRD_solution.col(0); 
 		point_aux = MHRD_solution.rightCols(2);
             
@@ -498,39 +498,39 @@ namespace fdapde {
       VoronoiTessellation voronoi_;                     // Voronoi representation of the domain, set in init
       
       // Problem data
-      DMatrix<double> locations_; 			// Locations, union of the locstions of the fit (and pred) functions. Dimension N x n_loc
-      DVector<int> depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
-      DVector<int> pred_depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
-      DMatrix<double> train_functions_; 		// Functional data used to compute the empirical measures and the associated IFDs, with respect to themeselves. Dimension: n_train x n_loc
-      DMatrix<bool> train_NA_matrix_;                   // Missing data pattern of the fit functions, used to compute the empirical densisty of the observational process. Dimension n_tain x n_loc
-      DMatrix<double> pred_functions_; 			// Functional data on which will be computed the IFDs with respect to the train functions. Dimension: n_pred x n_loc
-      DMatrix<bool> pred_NA_matrix_;                    // Missing data pattern of the pred functions, used to compute the empirical densisty of the observational process. Dimension n_pred x n_loc
-      DVector<double> phi_function_evaluation_; 	// Evaluation of the phi function produced in R. Is filled only after the initialization of the model. Size: n_nodes
-      DVector<double> external_voronoi_measures_; 	// Measures of the voronoi cells associated to each node
+      Eigen::Matrix<double, Dynamic, Dynamic> locations_; 			// Locations, union of the locstions of the fit (and pred) functions. Dimension N x n_loc
+      Eigen::Matrix<int, Dynamic, 1> depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
+      Eigen::Matrix<int, Dynamic, 1> pred_depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
+      Eigen::Matrix<double, Dynamic, Dynamic> train_functions_; 		// Functional data used to compute the empirical measures and the associated IFDs, with respect to themeselves. Dimension: n_train x n_loc
+      Eigen::Matrix<bool, Dynamic, Dynamic> train_NA_matrix_;                   // Missing data pattern of the fit functions, used to compute the empirical densisty of the observational process. Dimension n_tain x n_loc
+      Eigen::Matrix<double, Dynamic, Dynamic> pred_functions_; 			// Functional data on which will be computed the IFDs with respect to the train functions. Dimension: n_pred x n_loc
+      Eigen::Matrix<bool, Dynamic, Dynamic> pred_NA_matrix_;                    // Missing data pattern of the pred functions, used to compute the empirical densisty of the observational process. Dimension n_pred x n_loc
+      Eigen::Matrix<double, Dynamic, 1> phi_function_evaluation_; 	// Evaluation of the phi function produced in R. Is filled only after the initialization of the model. Size: n_nodes
+      Eigen::Matrix<double, Dynamic, 1> external_voronoi_measures_; 	// Measures of the voronoi cells associated to each node
       
       // Internal data
-      DVector<double> observation_density_vector_; 	// Estimated density of the observational process in the Voronoi cells. Is filled after init() has been called. Dimension n_train x n_nodes
-      DMatrix<double> voronoi_r_fit_; 			// Voronoi values for the fit functions. Dimension: n_train x n_nodes
-      DMatrix<bool> voronoi_NA_fit_;                    // Missing data pattern for the voronoi representation of the train functions. Dimension n_tain x n_nodes
-      DMatrix<double> voronoi_r_pred_; 			// Voronoi values for the predict functions. Dimension: n_pred x n_nodes
-      DMatrix<bool> voronoi_NA_pred_;                   // Missing data pattern for the voronoi representation of the pred functions. Dimension n_pred x n_nodes
+      Eigen::Matrix<double, Dynamic, 1> observation_density_vector_; 	// Estimated density of the observational process in the Voronoi cells. Is filled after init() has been called. Dimension n_train x n_nodes
+      Eigen::Matrix<double, Dynamic, Dynamic> voronoi_r_fit_; 			// Voronoi values for the fit functions. Dimension: n_train x n_nodes
+      Eigen::Matrix<bool, Dynamic, Dynamic> voronoi_NA_fit_;                    // Missing data pattern for the voronoi representation of the train functions. Dimension n_tain x n_nodes
+      Eigen::Matrix<double, Dynamic, Dynamic> voronoi_r_pred_; 			// Voronoi values for the predict functions. Dimension: n_pred x n_nodes
+      Eigen::Matrix<bool, Dynamic, Dynamic> voronoi_NA_pred_;                   // Missing data pattern for the voronoi representation of the pred functions. Dimension n_pred x n_nodes
       
       // Output
-      DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x depth_types.size()
-      DMatrix<double> IFD_pred_; 			// Integrated functional depth for predict functions. Dimension: n_pred x pred_depth_types.size()
-      DVector<double> mepi_fit_; 			// Modified Epigraph index fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
-      DVector<double> mhypo_fit_; 			// Modified Hypograph index for fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
-      DVector<double> mepi_pred_; 			// Modified Epigraph index pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
-      DVector<double> mhypo_pred_; 			// Modified Hypograph index for pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
+      Eigen::Matrix<double, Dynamic, Dynamic> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> IFD_pred_; 			// Integrated functional depth for predict functions. Dimension: n_pred x pred_depth_types.size()
+      Eigen::Matrix<double, Dynamic, 1> mepi_fit_; 			// Modified Epigraph index fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
+      Eigen::Matrix<double, Dynamic, 1> mhypo_fit_; 			// Modified Hypograph index for fit functions. Filled only if MHRD has beed required for fit functions. Size: n_train
+      Eigen::Matrix<double, Dynamic, 1> mepi_pred_; 			// Modified Epigraph index pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
+      Eigen::Matrix<double, Dynamic, 1> mhypo_pred_; 			// Modified Hypograph index for pred functions. Filled only if MHRD has beed required for pred functions. Size: n_pred
       
       // Boxplots components 
-      DMatrix<double> medians_; 			// Collection of medians w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<bool> medians_NA_; 			// Collection of medians NA masks w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<double> first_quartile_; 	                // Collection of first_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<double> third_quartile_; 		        // Collection of third_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<double> up_whisker_; 		        // Collection of up_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<double> low_whisker_; 		        // Collection of low_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
-      DMatrix<bool> outliers_;                           // Collection of outliers boolean values (in C++ notation) w.r.t. Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> medians_; 			// Collection of medians w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<bool, Dynamic, Dynamic> medians_NA_; 			// Collection of medians NA masks w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> first_quartile_; 	                // Collection of first_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> third_quartile_; 		        // Collection of third_quartile w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> up_whisker_; 		        // Collection of up_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<double, Dynamic, Dynamic> low_whisker_; 		        // Collection of low_whisker w.r.t. the Depths Types requested. Dimension: n_train x depth_types.size()
+      Eigen::Matrix<bool, Dynamic, Dynamic> outliers_;                           // Collection of outliers boolean values (in C++ notation) w.r.t. Depths Types requested. Dimension: n_train x depth_types.size()
       
       // initialization methods
       void compute_voronoi_representation_fit(){
@@ -540,10 +540,10 @@ namespace fdapde {
 	int n_nodes = this->domain_.n_nodes();
 	
 	// locate the locations (union of the single functions locations) with respect to the voronoi cells
-	DVector<int> locations_in_cells = voronoi_.locate(locations_);
+	Eigen::Matrix<int, Dynamic, 1> locations_in_cells = voronoi_.locate(locations_);
 	
 	// create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
-	DMatrix<int> Count_Train_cells;
+	Eigen::Matrix<int, Dynamic, Dynamic> Count_Train_cells;
 	
 	// resize the matrices that will store the voronoi coefficients for train and pred functions
 	voronoi_r_fit_.resize(n_train, n_nodes);
@@ -592,10 +592,10 @@ namespace fdapde {
 	int n_nodes = this->domain_.n_nodes();
 	
 	// locate the locations (union of the single functions locations) with respect to the voronoi cells
-	DVector<int> locations_in_cells = voronoi_.locate(locations_);
+	Eigen::Matrix<int, Dynamic, 1> locations_in_cells = voronoi_.locate(locations_);
 	
 	// create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
-	DMatrix<int> Count_Pred_cells;
+	Eigen::Matrix<int, Dynamic, Dynamic> Count_Pred_cells;
 	
 	// resize the matrices that will store the voronoi coefficients for train and pred functions
 	voronoi_r_pred_.resize(n_pred, n_nodes);
@@ -642,12 +642,12 @@ namespace fdapde {
 	int n_train = voronoi_r_fit_.rows();
 	int n_nodes = voronoi_r_fit_.cols();
       
-	medians_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	medians_ = Eigen::Matrix<double, Dynamic, Dynamic>::Zero(n_nodes, depth_types_.size());
 	medians_NA_.resize(n_nodes,depth_types_.size());
-	first_quartile_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
-	third_quartile_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
-	up_whisker_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
-	low_whisker_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
+	first_quartile_ = Eigen::Matrix<double, Dynamic, Dynamic>::Zero(n_nodes, depth_types_.size());
+	third_quartile_ = Eigen::Matrix<double, Dynamic, Dynamic>::Zero(n_nodes, depth_types_.size());
+	up_whisker_ = Eigen::Matrix<double, Dynamic, Dynamic>::Zero(n_nodes, depth_types_.size());
+	low_whisker_ = Eigen::Matrix<double, Dynamic, Dynamic>::Zero(n_nodes, depth_types_.size());
 	
       
 	outliers_.resize(n_train, depth_types_.size());
@@ -661,8 +661,8 @@ namespace fdapde {
       
 	for (auto j=0; j < depth_types_.size(); j++){
       
-	  DVector<double> IFD = IFD_fit_.col(j);
-	  DVector<double> IFD_sorted = IFD; 
+	  Eigen::Matrix<double, Dynamic, 1> IFD = IFD_fit_.col(j);
+	  Eigen::Matrix<double, Dynamic, 1> IFD_sorted = IFD; 
       
 	  // Sort the depths
 	  std::sort(IFD_sorted.begin(), IFD_sorted.end());
@@ -670,7 +670,7 @@ namespace fdapde {
 	  double max_depth = IFD_sorted(n_train-1); // maximum depth
 	  int middle = std::floor(n_train/2); // index that characterizes the minimum depth of the (little more than) 50% of the functions
 	  double middle_depth = IFD_sorted(middle); // minimum depth of the (little more than) central 50% of the functions
- 	  DVector<int> central_fun_indexes = DVector<int>::Zero(middle); // vector that will store the indices of the central 50% functions
+ 	  Eigen::Matrix<int, Dynamic, 1> central_fun_indexes = Eigen::Matrix<int, Dynamic, 1>::Zero(middle); // vector that will store the indices of the central 50% functions
  
 	  int count=0;
       
