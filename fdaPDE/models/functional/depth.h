@@ -180,18 +180,20 @@ namespace fdapde {
       DEPTH(const D & domain):domain_(domain){};
 
       // setters
-      void set_locations(const DMatrix<double> &  locations){  locations_ =  locations ; }
+      void set_locations(const std::vector<DMatrix<double>> &  locations){  locations_ =  locations ; }
+      void set_pred_locations(const std::vector<DMatrix<double>> &  locations_pred){  locations_pred_ =  locations_pred ; }
       void set_depth_types(const DVector<int> & depth_types ) { depth_types_ = depth_types; }
       void set_pred_depth_types(const DVector<int> & depth_types ) { pred_depth_types_ = depth_types; }
-      void set_train_functions(const DMatrix<double> &  train_functions){  train_functions_ =  train_functions ; }
-      void set_train_NA_matrix(const DMatrix<bool> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } 
-      void set_pred_functions( const DMatrix<double> & pred_functions) { pred_functions_ = pred_functions ; }
-      void set_pred_NA_matrix(const DMatrix<bool> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } 
+      void set_train_functions(const std::vector<DVector<double>> &  train_functions){  train_functions_ =  train_functions ; }
+      void set_train_NA_matrix(const std::vector<DVector<bool>> &  NA_matrix){  train_NA_matrix_ =  NA_matrix ; } 
+      void set_pred_functions(const std::vector<DVector<double>> & pred_functions) { pred_functions_ = pred_functions ; }
+      void set_pred_NA_matrix(const std::vector<DVector<bool>> &  NA_matrix){  pred_NA_matrix_ =  NA_matrix ; } 
       void set_phi_function_evaluation(const DVector<double> & phi_function_evaluation ) { phi_function_evaluation_ = phi_function_evaluation;} 
       void set_external_voronoi_measures(const DVector<double> & external_voronoi_measures ) { external_voronoi_measures_ = external_voronoi_measures;} 
+      void set_int_method(int int_method ) { int_method_ = int_method;} 
       
-      void set_voronoi_r_fit(const DMatrix<double> &  voronoi_r_fit ) { return voronoi_r_fit_ =  voronoi_r_fit ; }
-      void set_voronoi_r_pred(const DMatrix<double> &  voronoi_r_pred ) { return voronoi_r_pred_ =  voronoi_r_pred; } 
+      void set_seed_based_r_fit(const DMatrix<double> &  seed_based_r_fit ) { return seed_based_r_fit_ =  seed_based_r_fit ; }
+      void set_seed_based_r_pred(const DMatrix<double> &  seed_based_r_pred ) { return seed_based_r_pred_ =  seed_based_r_pred; } 
       
       void set_IFD_fit(const DMatrix<double> & IFD_fit ) { IFD_fit_ = IFD_fit; }
       void set_IFD_pred(const DMatrix<double> & IFD_pred ) { IFD_pred_ = IFD_pred; }
@@ -202,19 +204,20 @@ namespace fdapde {
       
       const DVector<int> & depth_types() const { return depth_types_; }
       const DVector<int> & pred_depth_types() const { return pred_depth_types_; }
-      const DMatrix<double> & locations() const { return locations_; }
-      const DMatrix<double> & train_functions() const { return train_functions_; }
-      const DMatrix<bool> & train_NA_pattern() const { return train_NA_matrix_; }
-      const DMatrix<double> & pred_functions() const { return pred_functions_; }
-      const DMatrix<bool> & pred_NA_pattern() const { return pred_NA_matrix_; }
+      const std::vector<DMatrix<double>> & locations() const { return locations_; }
+      const std::vector<DVector<double>> & train_functions() const { return train_functions_; }
+      const std::vector<DVector<bool>> & train_NA_pattern() const { return train_NA_matrix_; }
+      const std::vector<DVector<double>> & pred_functions() const { return pred_functions_; }
+      const std::vector<DVector<bool>> & pred_NA_pattern() const { return pred_NA_matrix_; }
       const DVector<double> & phi_function_evaluation() const { return phi_function_evaluation_; } // Returns phi function used to evaluate the IFD phi in the nodes of the functions
       const DVector<double> & external_voronoi_measures() const { return external_voronoi_measures_; } // return the voronoi measures, only for 2.5D sphere
+      int int_method() const { return int_method_; } // return the voronoi measures, only for 2.5D sphere
       
       const DVector<double> & density_vector(){return observation_density_vector_; }
-      const DMatrix<double> & voronoi_r_fit() const { return voronoi_r_fit_; }  
-      const DMatrix<bool> & voronoi_fit_NA() const { return voronoi_NA_fit_; } 
-      const DMatrix<double> & voronoi_r_pred() const { return voronoi_r_pred_; }
-      const DMatrix<bool> & vornoy_pred_NA() const { return voronoi_NA_pred_; } 
+      const DMatrix<double> & seed_based_r_fit() const { return seed_based_r_fit; }  
+      const DMatrix<bool> & seed_based_r_NA_fit() const { return seed_based_r_NA_fit_; } 
+      const DMatrix<double> & seed_based_r_pred() const { return seed_based_r_pred_; }
+      const DMatrix<bool> & seed_based_r_NA_pred() const { return seed_based_r_NA_pred_; } 
       
       const DMatrix<double> & IFD_fit() const { return IFD_fit_; }
       const DMatrix<double> & IFD_pred() const { return IFD_pred_; } 
@@ -234,19 +237,22 @@ namespace fdapde {
       
       
       void init() { // Initialization routine, prepares the environment for the solution of the problem.
-	// Compute voroni tessellation of the model (for the moment only <2,2>, <1,1> meshes are available)
-	VoronoiTessellation voronoi(domain_); 
-	this->voronoi_ = voronoi;  // Save the object in the internal memory for future use
-      
-	// At first compute the Voronoi representation of data; this needs to be done after the voronoi has been computed
-	this->compute_voronoi_representation_fit(); 
 	
-	// Now we have available in voronoi_r_fit and Voronoi NA fit the computed Voronoi representation of the matrix.
+	if(int_method_ == 0){ // Voronoi-based integration, we need to access to the Voronoi representation of the domain
+	  // Compute voroni tessellation of the model (for the moment only <2,2>, <1,1> meshes are available)
+	  VoronoiTessellation voronoi(domain_); 
+	  this->voronoi_ = voronoi;  // Save the object in the internal memory for future use
+	}
+	
+	// At first compute the seed-based representation of data; this needs to be done after the voronoi has been computed if int_method_ == 0.
+	this->compute_seed_based_representation_fit(); 
+	
+	// Now we have available in seed_based_r_fit and seed_based_r_NA_fit the computed seed-based (Voronoi or FEM) representation of the matrix.
 	// We can compute the empirical distribution (Q(p)) in the voronoi nodes, using the NA pattern. We provide equal weight to each element
-	int n_train = train_functions_.rows();
-	observation_density_vector_.resize(voronoi_.n_cells());
-	for (auto i=0; i<voronoi_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
-	  auto obs_element = voronoi_NA_fit_.col(i);
+	int n_train = seed_based_r_fit_.rows();
+	observation_density_vector_.resize(domain_.n_cells());
+	for (auto i=0; i<domain_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
+	  auto obs_element = seed_based_r_NA_fit_.col(i);
 	  observation_density_vector_(i) = n_train - obs_element.count();
 	}
 	observation_density_vector_ = observation_density_vector_ / n_train;
@@ -255,13 +261,13 @@ namespace fdapde {
       
       void solve() { //  Compute the integrated depths and the outputs that will be returned (save outputs in a df), fill output 
       
-	int n_train = this->train_functions_.rows();
-	int n_nodes = this->voronoi_.n_cells(); 
+	int n_train = this->seed_based_r_fit_.rows();
+	int n_nodes = this->domain_.n_cells(); 
 	
-	Depth_Solver solver(this->voronoi_r_fit_, this->voronoi_NA_fit_); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
+	Depth_Solver solver(this->seed_based_r_fit_, this->seed_based_r_NA_fit_); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
       
-	solver.set_pred_data(this->voronoi_r_fit_);
-	solver.set_pred_mask(this->voronoi_NA_fit_);
+	solver.set_pred_data(this->seed_based_r_fit_);
+	solver.set_pred_mask(this->seed_based_r_NA_fit_);
       
 	this->IFD_fit_.resize(n_train, this->depth_types_.size());
 	this->mepi_fit_.resize(n_train);
@@ -293,60 +299,164 @@ namespace fdapde {
 	for(auto i = 0; i< n_train; i++){
 	  weight_den(i)=0;
 	}
+	
+	if(this->int_method_ == 0){ // Voronoi case
       
-	for (auto i=0; i<n_nodes; i++){
-	  // extract the measure of the Voronoi cell 
-	  double measure = this->voronoi_.cell(i).measure();
-	  if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
-	    measure  = this->external_voronoi_measures_[i];
-	  }
+	  for (auto i=0; i<n_nodes; i++){
+	    // extract the measure of the Voronoi cell 
+	    double measure = this->voronoi_.cell(i).measure();
+	    if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){ // 2.5D case, but also the 3D case
+	      measure  = this->external_voronoi_measures_[i];
+	    }
 
-	  for(auto k =0; k<n_train; k++){
-	    if(!voronoi_NA_fit_(k,i)){
-	      weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
-	    }
-	  }
-      
-	  for (auto j=0; j<this->depth_types_.size(); j++){
-      
-	    int type = depth_types_(j);
-      
-	    switch(type) {
-	    case 1: //MBD
-	      {
-		point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
-	      
+	    for(auto k =0; k<n_train; k++){
+	      if(!seed_based_r_NA_fit_(k,i)){
+		weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
 	      }
-	      break;
-	      
-	    case 2: // FMD
-	      {
-		point_depth.col(j) = solver.compute_FMD(i);
-	      }  
-	      break;
-	    
-	    case 3: // MHRD
-	      {
-		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
-		point_depth.col(j) = MHRD_solution.col(0);
-		point_aux = MHRD_solution.rightCols(2); // Note: I'm not sure that epigraph and ipograph indices should be wieghted for w (phi/int(phi)). In the future we will need to handle this.
-            
-		mepi_fit_ = mepi_fit_ + point_aux.col(0)*measure;
-		mhypo_fit_ = mhypo_fit_ + point_aux.col(1)*measure;
-	      }  
-	      break;
-	    
-	    default:
-	      {} 
-	      break;
-	     
 	    }
       
+	    for (auto j=0; j<this->depth_types_.size(); j++){
+	      switch(depth_types_(j)) { // Basing on the type of depth required
+	      case 1: //MBD
+		{
+		  point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	      
+		}
+		break;
+	      
+	      case 2: // FMD
+		{
+		  point_depth.col(j) = solver.compute_FMD(i);
+		}  
+		break;
+	    
+	      case 3: // MHRD
+		{
+		  DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: MHRD is defined as the global minimum between the MEPI and MHIPO. So it will be overwritten afterwards.
+		  point_depth.col(j) = MHRD_solution.col(0);
+		  point_aux = MHRD_solution.rightCols(2); // Epigraph and hypograph indices
+            
+		  mepi_fit_ = mepi_fit_ + point_aux.col(0)*measure;
+		  mhypo_fit_ = mhypo_fit_ + point_aux.col(1)*measure;
+		}  
+		break;
+	    
+	      default:
+		{} 
+		break;
+	     
+	      }
+      
+      
+	    }
+	  
+	    IFD_fit_ = IFD_fit_ + point_depth*measure;
       
 	  }
-	  
-	  IFD_fit_ = IFD_fit_ + point_depth*measure;
+	}else{ // FEM P0 case
+	
+	  // Build storage matrices needed for the FEM P0 computation
+	  // # nodes x depth_types.size();
+	  DMatrix<double> depths_storage;
+	  depths_storage.resize(n_train, n_nodes * depth_types_.size()); // One column for each node and each type of depth required
+	  Dmatrix<double> mepi_storage;
+	  mepi_storage.resize(n_train, n_nodes);
+	  Dmatrix<double> mhypo_storage;
+	  mhypo_storage.resize(n_train, n_nodes);
+	
+	  // Extract the depths from solver before FEM computation.
+	  for (auto i=0; i<n_nodes; i++){
+	    for (auto j=0; j<this->depth_types_.size(); j++){
+	      switch(depth_types_(j)) { // Basing on the type of depth required
+	      case 1: //MBD
+		{
+		  depths_storage.col(i+j*n_nodes) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	      
+		}
+		break;
+	      
+	      case 2: // FMD
+		{
+		  depths_storage.col(i+j*n_nodes) = solver.compute_FMD(i);
+		}  
+		break;
+	    
+	      case 3: // MHRD
+		{
+		  DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); 
+		  depths_storage.col(i+j*n_nodes) = MHRD_solution.col(0);
+		  point_aux = MHRD_solution.rightCols(2); // Epigraph and Hypograph indices
+            
+		  mepi_storage.col(i) = point_aux.col(0);
+		  mhypo_storage.col(i) = point_aux.col(1);
+		}  
+		break;
+	    
+	      default:
+		{} 
+		break;
+	     
+	      }
       
+      
+	    }
+	  }
+	
+	  // Aux variables
+	  DMatrix<double> baryecenters_depth;
+	  baryecenters_detph.resize(n_train,this->depth_types_.size() + 2); // Depths + mepi + mhypo
+	  baryecenters_depth.setZero();
+	  DVector<double> baryecenters_weights;
+	  baryecenters_weights.resize(n_train);
+	  baryecenters_weights.setZero();
+	  DVector<bool> missing_cell;
+	  missing_cell.resize(n_train);
+	  missing_cell.setZero();
+	
+	  // Perform FEM computation for both the numerator and denominator of FEMD
+	  for(auto iter = this->cells_.begin(); iter != this->cells_.end(); iter++){ // For each element (triangle or thetahedron in the Triangulation)
+	    // initialize
+	    baryecenters_detph.setZero();
+	    baryecenters_weights.setZero();
+	    missing_cell.setConstant(false);
+	
+	    // Get the measure of the simplex
+	    double measure = iter->measure();
+	  
+	    // Extract the nodes indices
+	    DVector<int> node_ids = iter->node_ids();
+	  
+	    // Compute the barycenters
+	    for(int node_idx = 0; node_idx < node_ids.size(); node_ids++){
+	      for(int j = 0; j < this->depth_types_.size(); j++){
+		baryecenters_depth.col(j) = baryecenters_depth.col(j) + depths_storage.col(node_idx +j*n_nodes);
+	      }
+	      baryecenters_depth.col(this->depth_types_.size()) = baryecenters_depth.col(this->depth_types_.size()) + mepi_storage.col(node_idx);
+	      baryecenters_depth.col(this->depth_types_.size()+1) = baryecenters_depth.col(this->depth_types_.size()+1) + mhypo_storage.col(node_idx);
+	      baryecenters_weights = baryecenters_weights + this->phi_function_evaluation_(node_idx);
+	      for(auto k=0; k < n_train; k++){
+		if(seed_based_r_NA_fit_(k,node_idx) == true){
+		  missing_cell(k) = true;
+		}
+	      }
+	    }
+	    baryecenters_depth = baryecenters_depth / node_ids.size();
+	    baryecenters_weights = baryecenters_weights / node_ids.size();
+	  
+	    // Add the elements to the overall integral
+	    for(auto k=0; k < n_train; k++){
+	      if(missing_cell(k)==false){ // If the function is missing in the cell k, just skip it (non-exisiting in the integral)
+		weight_den(k) = weight_den(k) + baryecenters_weights * measure;
+	  
+		for(int j =0; j < this->depth_types_.size(); j++){
+		  IFD_fit_(k,j) = IFD_fit_(k,j) + baryecenters_depth(k,j)*measure;
+		}
+		mepi_fit_(k) = mepi_fit_(k) + baryecenters_depth.col(this->depth_types_.size())*measure;
+		mhypo_fit_(k) = mhypo_fit_(k) + baryecenters_depth.col(this->depth_types_.size()+1)*measure;
+	      }
+	    }
+	  }
+	
 	}
 	
 	
@@ -378,13 +488,13 @@ namespace fdapde {
 	int n_pred = this->pred_functions_.rows();
 	int n_nodes = this->domain_.n_nodes(); 
 	
-	// compute the voronoi representations for pred functions
-	this->compute_voronoi_representation_pred();
+	// compute the seed_based representations for pred functions (Voronoi if int_method == 0, FEM otherwise)
+	this->compute_seed_based_representation_pred();
       
-        Depth_Solver solver(this->voronoi_r_fit_, this->voronoi_NA_fit_); // this solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
+        Depth_Solver solver(this->seed_based_r_fit_, this->seed_based_r_NA_fit_); // this solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
       
-	solver.set_pred_data(this->voronoi_r_pred_);
-	solver.set_pred_mask(this->voronoi_NA_pred_);
+	solver.set_pred_data(this->seed_based_r_pred_);
+	solver.set_pred_mask(this->seed_based_r_NA_pred_);
       
 	this->IFD_pred_.resize(n_pred, this->pred_depth_types_.size());
 	this->mepi_pred_.resize(n_pred);
@@ -416,62 +526,168 @@ namespace fdapde {
 	for(auto i = 0; i< n_pred; i++){
 	  weight_den(i)=0;
 	}
-      
-        // compute the intergals summing up the effect of each cell
-	for (auto i=0; i<n_nodes; i++){
+        
+        if(this->int_method_ == 0){ // Voronoi case 
+	  // compute the intergals summing up the effect of each cell
+	  for (auto i=0; i<n_nodes; i++){
 	  
-	  double measure =  this->voronoi_.cell(i).measure();
+	    double measure =  this->voronoi_.cell(i).measure();
 	  
-	  if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
-	    measure  = this->external_voronoi_measures_[i];
-	  }
-	  
-	  // compute /int_{O} phi(q(p)) dp
-	  for(auto k =0; k<n_pred; k++){
-	    if(!voronoi_NA_fit_(k,i)){
-	      weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
+	    if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
+	      measure  = this->external_voronoi_measures_[i];
 	    }
-	  }
-      
-	  for (auto j=0; j<this->pred_depth_types_.size(); j++){
-      
-	    int type = pred_depth_types_(j);
-      
-	    switch(type) {
-	    case 1: // MBD
-	      {
-		point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	  
+	    // compute /int_{O} phi(q(p)) dp
+	    for(auto k =0; k<n_pred; k++){
+	      if(!seed_based_r_NA_fit_(k,i)){
+		weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
 	      }
-	      break;
+	    }
+      
+	    for (auto j=0; j<this->pred_depth_types_.size(); j++){
+      
+	      int type = pred_depth_types_(j);
+      
+	      switch(type) {
+	      case 1: // MBD
+		{
+		  point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+		}
+		break;
 	    
-	    case 2: // FMD
-	      {
-		point_depth.col(j) = solver.compute_FMD(i);
-	      }
-	      break;
+	      case 2: // FMD
+		{
+		  point_depth.col(j) = solver.compute_FMD(i);
+		}
+		break;
 	    
-	    case 3: // MHRD
-	      {
-		DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is overwritten afterwards (due to def).
-		point_depth.col(j) = MHRD_solution.col(0); 
-		point_aux = MHRD_solution.rightCols(2);
+	      case 3: // MHRD
+		{
+		  DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); // Note: this value IS NOT the real point MHRD. MHRD is overwritten afterwards (due to def).
+		  point_depth.col(j) = MHRD_solution.col(0); 
+		  point_aux = MHRD_solution.rightCols(2);
             
-		mepi_pred_ = mepi_pred_ + point_aux.col(0)*measure;
-		mhypo_pred_ = mhypo_pred_ + point_aux.col(1)*measure;
-	      }
-	      break;
+		  mepi_pred_ = mepi_pred_ + point_aux.col(0)*measure;
+		  mhypo_pred_ = mhypo_pred_ + point_aux.col(1)*measure;
+		}
+		break;
 	    
-	    default:
-	      {}
-	      break;
-	    }
+	      default:
+		{}
+		break;
+	      }
       
+      
+	    }
+	  
+	    // compute /int_{O} D(X(p), fit_functions)*phi(q(p)) dp
+	    IFD_pred_ = IFD_pred_ + point_depth*measure;
       
 	  }
-	  
-	  // compute /int_{O} D(X(p), fit_functions)*phi(q(p)) dp
-	  IFD_pred_ = IFD_pred_ + point_depth*measure;
+	}else{ // FEM P0 case
+	
+	  // Build storage matrices needed for the FEM P0 computation
+	  // # nodes x depth_types.size();
+	  DMatrix<double> depths_storage;
+	  depths_storage.resize(n_pred, n_nodes * pred_depth_types_.size()); // One column for each node and each type of depth required
+	  depths_storage.setZero();
+	  Dmatrix<double> mepi_storage;
+	  mepi_storage.resize(n_pred, n_nodes);
+	  mepi_storage.setZero();
+	  Dmatrix<double> mhypo_storage;
+	  mhypo_storage.resize(n_pred, n_nodes);
+	  mhypo_storage.setZero();
+	
+	  // Extract the depths from solver before FEM computation.
+	  for (auto i=0; i<n_nodes; i++){
+	    for (auto j=0; j<this->pred_depth_types_.size(); j++){
+	      switch(pred_depth_types_(j)) { // Basing on the type of depth required
+	      case 1: //MBD
+		{
+		  depths_storage.col(i+j*n_nodes) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+	      
+		}
+		break;
+	      
+	      case 2: // FMD
+		{
+		  depths_storage.col(i+j*n_nodes) = solver.compute_FMD(i);
+		}  
+		break;
+	    
+	      case 3: // MHRD
+		{
+		  DMatrix<double> MHRD_solution = solver.compute_MHRD(i) * this->phi_function_evaluation_(i); 
+		  depths_storage.col(i+j*n_nodes) = MHRD_solution.col(0);
+		  point_aux = MHRD_solution.rightCols(2); // Epigraph and Hypograph indices
+            
+		  mepi_storage.col(i) = point_aux.col(0);
+		  mhypo_storage.col(i) = point_aux.col(1);
+		}  
+		break;
+	    
+	      default:
+		{} 
+		break;
+	     
+	      }
       
+      
+	    }
+	  }
+	
+	  // Aux variables
+	  DMatrix<double> baryecenters_depth;
+	  baryecenters_detph.resize(n_pred,this->pred_depth_types_.size() + 2); // Depths + mepi + mhypo
+	  DVector<double> baryecenters_weights;
+	  baryecenters_weights.resize(n_pred);
+	  DVector<bool> missing_cell;
+	  missing_cell.resize(n_pred);
+	
+	  // Perform FEM computation for both the numerator and denominator of FEMD
+	  for(auto iter = this->cells_.begin(); iter != this->cells_.end(); iter++){ // For each element (triangle or thetahedron in the Triangulation)
+	    // initialize
+	    baryecenters_detph.setZero();
+	    baryecenters_weights.setZero();
+	    missing_cell.setConstant(false);
+	
+	    // Get the measure of the simplex
+	    double measure = iter->measure();
+	  
+	    // Extract the nodes indices
+	    DVector<int> node_ids = iter->node_ids();
+	  
+	    // Compute the barycenters
+	    for(int node_idx = 0; node_idx < node_ids.size(); node_ids++){
+	      for(int j = 0; j < this->pred_depth_types_.size(); j++){
+		baryecenters_depth.col(j) = baryecenters_depth.col(j) + depths_storage.col(node_idx +j*n_nodes);
+	      }
+	      baryecenters_depth.col(this->pred_depth_types_.size()) = baryecenters_depth.col(this->pred_depth_types_.size()) + mepi_storage.col(node_idx);
+	      baryecenters_depth.col(this->pred_depth_types_.size()+1) = baryecenters_depth.col(this->pred_depth_types_.size()+1) + mhypo_storage.col(node_idx);
+	      baryecenters_weights = baryecenters_weights + this->phi_function_evaluation_(node_idx);
+	      for(auto k=0; k < n_pred; k++){
+		if(seed_based_r_NA_fit_(k,node_idx) == true){
+		  missing_cell(k) = true;
+		}
+	      }
+	    }
+	    baryecenters_depth = baryecenters_depth / node_ids.size();
+	    baryecenters_weights = baryecenters_weights / node_ids.size();
+	  
+	    // Add the elements to the overall integral
+	    for(auto k=0; k < n_pred; k++){
+	      if(missing_cell(k)==false){ // If the function is missing in the cell k, just skip it (non-exisiting in the integral)
+		weight_den(k) = weight_den(k) + baryecenters_weights * measure;
+	  
+		for(int j =0; j < this->pred_depth_types_.size(); j++){
+		  IFD_fit_(k,j) = IFD_fit_(k,j) + baryecenters_depth(k,j)*measure;
+		}
+		mepi_fit_(k) = mepi_fit_(k) + baryecenters_depth.col(this->pred_depth_types_.size())*measure;
+		mhypo_fit_(k) = mhypo_fit_(k) + baryecenters_depth.col(this->pred_depth_types_.size()+1)*measure;
+	      }
+	    }
+	  }
+	
 	}
 	
 	for(auto j=0; j < this->pred_depth_types_.size();j++){ 
@@ -499,22 +715,24 @@ namespace fdapde {
       VoronoiTessellation voronoi_;                     // Voronoi representation of the domain, set in init
       
       // Problem data
-      DMatrix<double> locations_; 			// Locations, union of the locstions of the fit (and pred) functions. Dimension N x n_loc
+      std::vector<DMatrix<double>> locations_; 		// Locations, vector of matrices of locations, dimension may vary. If only one element is present, those are common locations for all the functions; Otherwise we have a locations set for every function. If int_method_ == 0 (FEM) then we have only one matrix that concided with the matrix of nodes 
+      std::vector<DMatrix<double>> locations_pred_;    // Locations for predicted functions, vector of matrices of locations, dimension may vary. If only one element is present, those are common locations for all the functions; Otherwise we have a locations set for every function.
       DVector<int> depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
       DVector<int> pred_depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
-      DMatrix<double> train_functions_; 		// Functional data used to compute the empirical measures and the associated IFDs, with respect to themeselves. Dimension: n_train x n_loc
-      DMatrix<bool> train_NA_matrix_;                   // Missing data pattern of the fit functions, used to compute the empirical densisty of the observational process. Dimension n_tain x n_loc
-      DMatrix<double> pred_functions_; 			// Functional data on which will be computed the IFDs with respect to the train functions. Dimension: n_pred x n_loc
-      DMatrix<bool> pred_NA_matrix_;                    // Missing data pattern of the pred functions, used to compute the empirical densisty of the observational process. Dimension n_pred x n_loc
+      std::vector<DVector<double>> train_functions_; 	// Functional data used to compute the empirical measures and the associated IFDs, with respect to themeselves. Dimension: n_train, each fucntion may have different size
+      std::vector<DVector<bool>> train_NA_matrix_;      // Missing data pattern of the fit functions, used to compute the empirical densisty of the observational process. Dimension n_tain, each mask may have different size
+      std::vector<DVector<double>> pred_functions_; 	// Functional data on which will be computed the IFDs with respect to the train functions. Dimension: n_pred, each function may have different size
+      std::vector<DVector<bool>> pred_NA_matrix_;       // Missing data pattern of the pred functions, used to compute the empirical densisty of the observational process. Dimension n_pred, each mask may have a different size
       DVector<double> phi_function_evaluation_; 	// Evaluation of the phi function produced in R. Is filled only after the initialization of the model. Size: n_nodes
       DVector<double> external_voronoi_measures_; 	// Measures of the voronoi cells associated to each node
+      int int_method;					// Flag for the type of integration method used. 0 indicates FEM (with integration formula P0 at the momoent)
       
       // Internal data
       DVector<double> observation_density_vector_; 	// Estimated density of the observational process in the Voronoi cells. Is filled after init() has been called. Dimension n_train x n_nodes
-      DMatrix<double> voronoi_r_fit_; 			// Voronoi values for the fit functions. Dimension: n_train x n_nodes
-      DMatrix<bool> voronoi_NA_fit_;                    // Missing data pattern for the voronoi representation of the train functions. Dimension n_tain x n_nodes
-      DMatrix<double> voronoi_r_pred_; 			// Voronoi values for the predict functions. Dimension: n_pred x n_nodes
-      DMatrix<bool> voronoi_NA_pred_;                   // Missing data pattern for the voronoi representation of the pred functions. Dimension n_pred x n_nodes
+      DMatrix<double> seed_based_r_fit_; 	        // Voronoi (int_method_ == 0) / nodes (int_methods == 1)  values for the fit functions. Dimension: n_train x n_nodes
+      DMatrix<bool> seed_based_r_NA_fit_;               // Missing data pattern for the Voronoi (int_method_ == 0) / nodes (int_methods == 1) rep. of the train functions. Dimension n_tain x n_nodes
+      DMatrix<double> seed_based_r_pred_; 		// Voronoi (int_method_ == 0) / nodes (int_methods == 1) values for the predict functions. Dimension: n_pred x n_nodes
+      DMatrix<bool> seed_based_r_NA_pred_;              // Missing data pattern for the Voronoi (int_method_ == 0) / nodes (int_methods == 1)  rep. of the pred functions. Dimension n_pred x n_nodes
       
       // Output
       DMatrix<double> IFD_fit_; 			// Integrated functional depth for fit functions. Dimension: n_train x depth_types.size()
@@ -534,51 +752,86 @@ namespace fdapde {
       DMatrix<bool> outliers_;                           // Collection of outliers boolean values (in C++ notation) w.r.t. Depths Types requested. Dimension: n_train x depth_types.size()
       
       // initialization methods
-      void compute_voronoi_representation_fit(){
+      void compute_seed_based_representation_fit(){ 
       
-	int n_train = this->train_functions_.rows();
-	int n_loc = this->locations_.rows();
+	int n_train = this->train_functions_.size();
+	//int n_loc = this->locations_.rows();
 	int n_nodes = this->domain_.n_nodes();
 	
-	// locate the locations (union of the single functions locations) with respect to the voronoi cells
-	DVector<int> locations_in_cells = voronoi_.locate(locations_);
+	if(this->int_method_ == 0){ // Voronoi representation: we need to compute the spatial averages in each voronoi cell.
 	
-	// create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
-	DMatrix<int> Count_Train_cells;
-	
-	// resize the matrices that will store the voronoi coefficients for train and pred functions
-	voronoi_r_fit_.resize(n_train, n_nodes);
-	voronoi_NA_fit_.resize(n_train, n_nodes);
-	Count_Train_cells.resize(n_train, n_nodes);
-	
-	// initialization
-	for(auto i = 0; i< n_train; i++){
-	  for(auto j =0; j< n_nodes; j++){  
-	    voronoi_r_fit_(i,j) = 0;
-	    voronoi_NA_fit_(i,j) = true;
-	    Count_Train_cells(i,j) = 0;
-	  }
-	}
-	
-	int aux_index;
-	
-	// filling the coefficients matrices for fit functions
-	for (auto i =0; i< n_train; i++){
-	  for(auto j=0; j< n_loc; j++){
-	    if(!train_NA_matrix_(i,j)){
-	      aux_index = locations_in_cells(j);
-	      Count_Train_cells(i,aux_index)++;
-	      voronoi_NA_fit_(i,aux_index) = false;
-	      voronoi_r_fit_(i,aux_index) = voronoi_r_fit_(i,aux_index) + train_functions_(i,j);
+	  // locate the locations (union of the single functions locations) with respect to the voronoi cells
+	  std::vector<DVector<int>> locations_in_cells;
+	  locations_in_cells.resize(n_train);
+	  if(locations_.size() == 1){ // only one locations set: all the functions are referring to the same locations vector (i.e. train_functions is actually a matrix). 
+	    DVector<int> locate_out = voronoi_.locate(locations_[0]);
+	    for(int i = 0; i < n_train; i++){
+	      locations_in_cells[i] = locate_out; // Locate the locations once for all
+	    }
+	  }else{ // Each function has its own locations set. We are forced to locate every function set
+	    for(int i = 0; i < n_train; i++){
+	      locations_in_cells[i] = voronoi_.locate(locations_[i]); // Locate the locations for the i-th function
 	    }
 	  }
-	}
 	
-	// each value is the average of the observed values of the function in the Voronoi cell
-	for(auto i = 0; i< n_train; i++){
-	  for(auto j =0; j< n_nodes; j++){  
-	    if(Count_Train_cells(i,j)!=0){
-	      voronoi_r_fit_(i,j) = voronoi_r_fit_(i,j)/Count_Train_cells(i,j);
+	
+	  // create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
+	  DMatrix<int> Count_Train_cells;
+	
+	  // resize the matrices that will store the voronoi coefficients for train and pred functions
+	  seed_based_r_fit_.resize(n_train, n_nodes);
+	  seed_based_r_NA_fit_.resize(n_train, n_nodes);
+	  Count_Train_cells.resize(n_train, n_nodes);
+	
+	  // initialization
+	  for(auto i = 0; i< n_train; i++){
+	    for(auto j =0; j< n_nodes; j++){  
+	      seed_based_r_fit_(i,j) = 0;
+	      seed_based_r_NA_fit_(i,j) = true;
+	      Count_Train_cells(i,j) = 0;
+	    }
+	  }
+	
+	  int aux_index;
+	
+	  // filling the coefficients matrices for fit functions
+	  for (auto i =0; i< n_train; i++){
+	    int n_loc = locations_in_cells[i].size();
+	    for(auto j=0; j< n_loc; j++){
+	      if(!train_NA_matrix_(i,j)){
+		aux_index = locations_in_cells[i](j);
+		Count_Train_cells(i,aux_index)++;
+		seed_based_r_NA_fit_(i,aux_index) = false;
+		seed_based_r_fit_(i,aux_index) = seed_based_r_fit_(i,aux_index) + train_functions_[i](j);
+	      }
+	    }
+	  }
+	
+	  // each value is the average of the observed values of the function in the Voronoi cell
+	  for(auto i = 0; i< n_train; i++){
+	    for(auto j =0; j< n_nodes; j++){  
+	      if(Count_Train_cells(i,j)!=0){
+		seed_based_r_fit_(i,j) = seed_based_r_fit_(i,j)/Count_Train_cells(i,j);
+	      }
+	    }
+	  }
+	
+	}else{ // int_method_ = 1: we are using a FEM based representation
+	  
+	  // In this situation, we have that locations are identical for all the functions, and eventually are the nodes of the Triangulation of the domain.
+	  // resize the matrices that will store the voronoi coefficients for train and pred functions
+	  seed_based_r_fit_.resize(n_train, n_nodes);
+	  seed_based_r_NA_fit_.resize(n_train, n_nodes);
+	
+	  for(auto i = 0; i< n_train; i++){
+	    for(auto j =0; j< n_nodes; j++){
+	      // initialization
+	      seed_based_r_fit_(i,j) = 0;
+	      seed_based_r_NA_fit_(i,j) = true;  
+	      if(!train_NA_matrix_(i,j)){
+		seed_based_r_fit_(i,j) = train_functions_[i](j);
+		seed_based_r_NA_fit_(i,j) = false; 
+	      }
 	    }
 	  }
 	}
@@ -586,51 +839,81 @@ namespace fdapde {
 	return;
       }
     
-      void compute_voronoi_representation_pred(){
+      void compute_seed_based_representation_pred(){
 	
-	int n_pred = this->pred_functions_.rows();
-	int n_loc = this->locations_.rows();
+	int n_pred = this->pred_functions_.size();
+	//int n_loc = this->locations_.rows();
 	int n_nodes = this->domain_.n_nodes();
 	
-	// locate the locations (union of the single functions locations) with respect to the voronoi cells
-	DVector<int> locations_in_cells = voronoi_.locate(locations_);
+	if(this->int_method_ == 0){ // Voronoi based integration: we need to compute the spatial averages
 	
-	// create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
-	DMatrix<int> Count_Pred_cells;
-	
-	// resize the matrices that will store the voronoi coefficients for train and pred functions
-	voronoi_r_pred_.resize(n_pred, n_nodes);
-	voronoi_NA_pred_.resize(n_pred, n_nodes);
-	Count_Pred_cells.resize(n_pred, n_nodes);
-	
-	// initialization
-	for(auto i = 0; i< n_pred; i++){
-	  for(auto j =0; j< n_nodes; j++){
-	    voronoi_r_pred_(i,j) = 0;
-	    voronoi_NA_pred_(i,j) = true;
-	    Count_Pred_cells(i,j) = 0;
-	  }
-	}
-	
-	int aux_index;
-	
-	// Filling the coefficients matrices for pred functions
-	for (auto i =0; i< n_pred; i++){
-	  for(auto j=0; j< n_loc; j++){
-	    if(!pred_NA_matrix_(i,j)){
-	      aux_index = locations_in_cells(j);
-	      Count_Pred_cells(i,aux_index)++;
-	      voronoi_NA_pred_(i,aux_index) = false;
-	      voronoi_r_pred_(i,aux_index) = voronoi_r_pred_(i,aux_index) + pred_functions_(i,j);
+	  // locate the locations with respect to the voronoi cells
+	  std::vector<DVector<int>> locations_in_cells;
+	  locations_in_cells.resize(n_pred);
+	  if(locations_pred.size() == 1){ // only one locations set: all the functions are referring to the same locations vector (i.e. train_functions is actually a matrix). 
+	    DVector<int> locate_out = voronoi_.locate(locations_pred[0]);
+	    for(int i = 0; i < n_train; i++){
+	      locations_in_cells[i] = locate_out; // Locate the locations once for all
+	    }
+	  }else{ // Each function has its own locations set. We are forced to locate every function set
+	    for(int i = 0; i < n_pred; i++){
+	      locations_in_cells[i] = voronoi_.locate(locations_pred[i]); // Locate the locations for the i-th function
 	    }
 	  }
-	}
 	
-	// each value is the average of the observed values of the function in the Voronoi cell
-	for(auto i = 0; i< n_pred; i++){
-	  for(auto j =0; j< n_nodes; j++){  
-	    if(Count_Pred_cells(i,j)!=0){
-	      voronoi_r_pred_(i,j) = voronoi_r_pred_(i,j)/Count_Pred_cells(i,j);
+	  // create the matrices that will store the number of locations with non-missimng measure in each location (to be filled in each cycle)
+	  DMatrix<int> Count_Pred_cells;
+	
+	  // resize the matrices that will store the voronoi coefficients for train and pred functions
+	  seed_based_r_pred_.resize(n_pred, n_nodes);
+	  seed_based_r_NA_pred_.resize(n_pred, n_nodes);
+	  Count_Pred_cells.resize(n_pred, n_nodes);
+	
+	  // initialization
+	  for(auto i = 0; i< n_pred; i++){
+	    for(auto j =0; j< n_nodes; j++){
+	      seed_based_r_pred_(i,j) = 0;
+	      seed_based_r_NA_pred_(i,j) = true;
+	      Count_Pred_cells(i,j) = 0;
+	    }
+	  }
+	
+	  int aux_index;
+	
+	  // Filling the coefficients matrices for pred functions
+	  for (auto i =0; i< n_pred; i++){
+	    int n_loc = locations_in_cells[i].size();
+	    for(auto j=0; j< n_loc; j++){
+	      if(!pred_NA_matrix_(i,j)){
+		aux_index = locations_in_cells[i](j);
+		Count_Pred_cells(i,aux_index)++;
+		seed_based_r_NA_pred_(i,aux_index) = false;
+		seed_based_r_pred_(i,aux_index) = seed_based_r_pred_(i,aux_index) + pred_functions_[i](j);
+	      }
+	    }
+	  }
+	
+	  // each value is the average of the observed values of the function in the Voronoi cell
+	  for(auto i = 0; i< n_pred; i++){
+	    for(auto j =0; j< n_nodes; j++){  
+	      if(Count_Pred_cells(i,j)!=0){
+		seed_based_r_pred_(i,j) = seed_based_r_pred_(i,j)/Count_Pred_cells(i,j);
+	      }
+	    }
+	  }
+	
+	}else{ // int_method==1 --> FEM based representaion, locations is just one single matrix identical with the triangulation nodes
+	
+	
+	  // Filling the coefficients matrices for pred functions
+	  for (auto i =0; i< n_pred; i++){
+	    seed_based_r_pred_(i,j) = 0;
+	    seed_based_r_NA_pred_(i,j) = true;
+	    for(auto j=0; j < n_nodes; j++){
+	      if(!pred_NA_matrix_(i,j)){
+		seed_based_r_pred_(i,j) = pred_functions_[i](j);
+		seed_based_r_NA_pred_(i,j) = false;
+	      }
 	    }
 	  }
 	}
@@ -640,8 +923,8 @@ namespace fdapde {
       
       void compute_functional_boxplot(){
       
-	int n_train = voronoi_r_fit_.rows();
-	int n_nodes = voronoi_r_fit_.cols();
+	int n_train = seed_based_r_fit_.rows();
+	int n_nodes = seed_based_r_fit_.cols();
       
 	medians_ = DMatrix<double>::Zero(n_nodes, depth_types_.size());
 	medians_NA_.resize(n_nodes,depth_types_.size());
@@ -678,15 +961,15 @@ namespace fdapde {
 	  // fill median, identify central functions, initialize the quartiles
 	  for(auto i = 0; i<n_train && count < middle; i++){
 	    if(IFD(i)>=middle_depth){ // If depth is higher than the threshold, add the function to the central 50% ones
-	      //central_block.row(count) = voronoi_r_fit_.row(i);
+	      //central_block.row(count) = seed_based_r_fit_.row(i);
 	      central_fun_indexes(count)=i;
 	      count++;
 	    }
 	    if(IFD(i) == max_depth){
-	      medians_.col(j) = voronoi_r_fit_.row(i);
-	      medians_NA_.col(j) = voronoi_NA_fit_.row(i);
-	      first_quartile_.col(j) = voronoi_r_fit_.row(i); //NO this way we are not handling well the possibly missing 
-	      third_quartile_.col(j) = voronoi_r_fit_.row(i);
+	      medians_.col(j) = seed_based_r_fit_.row(i);
+	      medians_NA_.col(j) = seed_based_r_NA_fit_.row(i);
+	      first_quartile_.col(j) = seed_based_r_fit_.row(i); //NO this way we are not handling well the possibly missing 
+	      third_quartile_.col(j) = seed_based_r_fit_.row(i);
 	    }
 	  }
       
@@ -696,9 +979,9 @@ namespace fdapde {
 	      bool found=false;
 	      int count=0;
 	      while(!found && count<middle){
-		if(!voronoi_NA_fit_(central_fun_indexes(count), i)){ // The function is not missing in node i
-		  first_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(count),i);
-		  third_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(count),i);
+		if(!seed_based_r_NA_fit_(central_fun_indexes(count), i)){ // The function is not missing in node i
+		  first_quartile_(i,j) = seed_based_r_fit_(central_fun_indexes(count),i);
+		  third_quartile_(i,j) = seed_based_r_fit_(central_fun_indexes(count),i);
 		  found=true;
 		}
 		count++;
@@ -709,12 +992,12 @@ namespace fdapde {
 	  // now compute the quartiles using the central block: envelope of the central 50% functions
 	  for(auto i = 0; i < n_nodes; i++){
 	    for(auto k = 0; k < middle; k++){
-	      if(!voronoi_NA_fit_(central_fun_indexes(k), i)){ // The datum is not missing in the k-th central function
-		if(voronoi_r_fit_(central_fun_indexes(k),i) <= first_quartile_(i,j)){
-		  first_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(k),i);
+	      if(!seed_based_r_NA_fit_(central_fun_indexes(k), i)){ // The datum is not missing in the k-th central function
+		if(seed_based_r_fit_(central_fun_indexes(k),i) <= first_quartile_(i,j)){
+		  first_quartile_(i,j) = seed_based_r_fit_(central_fun_indexes(k),i);
 		}
-		if(voronoi_r_fit_(central_fun_indexes(k),i) >= third_quartile_(i,j)){
-		  third_quartile_(i,j) = voronoi_r_fit_(central_fun_indexes(k),i);
+		if(seed_based_r_fit_(central_fun_indexes(k),i) >= third_quartile_(i,j)){
+		  third_quartile_(i,j) = seed_based_r_fit_(central_fun_indexes(k),i);
 		}
            
 	      }
@@ -731,11 +1014,11 @@ namespace fdapde {
 	    low_whisker_(i,j) = first_quartile_(i,j) - 1.5*IQR;
       
 	    for(auto k=0; k < n_train; k++){
-	      if(!voronoi_NA_fit_(k, i)){ // The datum is not missing in the function of interest
-		if(voronoi_r_fit_(k,i) < low_whisker_(i,j)){
+	      if(!seed_based_r_NA_fit_(k, i)){ // The datum is not missing in the function of interest
+		if(seed_based_r_fit_(k,i) < low_whisker_(i,j)){
 		  outliers_(k,j) = true;
 		}
-		if(voronoi_r_fit_(k,i) > up_whisker_(i,j)){
+		if(seed_based_r_fit_(k,i) > up_whisker_(i,j)){
 		  outliers_(k,j) = true;
 		}
            
