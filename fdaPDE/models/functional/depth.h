@@ -94,7 +94,7 @@ namespace fdapde {
       }
       void set_pred_mask(const DMatrix<bool> & pred_mask){pred_mask_ = pred_mask;}
 
-      DVector<double> compute_MBD(int j){
+      DVector<double> compute_SD(int j){
 	if(!are_rankings_computed){
 	  this->compute_rankings(); // Compute the rankings of the data to be evaluated ( that may involve both the single fit or the single pred) data w.r.t. the fit data already encoded.
 	}
@@ -305,7 +305,7 @@ namespace fdapde {
 	  for (auto i=0; i<n_nodes; i++){
 	    // extract the measure of the Voronoi cell 
 	    double measure = this->voronoi_.cell(i).measure();
-	    if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){ // 2.5D case, but also the 3D case
+	    if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
 	      measure  = this->external_voronoi_measures_[i];
 	    }
 
@@ -317,9 +317,9 @@ namespace fdapde {
       
 	    for (auto j=0; j<this->depth_types_.size(); j++){
 	      switch(depth_types_(j)) { // Basing on the type of depth required
-	      case 1: //MBD
+	      case 1: //SD: simplicial univariate depth
 		{
-		  point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+		  point_depth.col(j) = solver.compute_SD(i) * this->phi_function_evaluation_(i);
 	      
 		}
 		break;
@@ -368,9 +368,9 @@ namespace fdapde {
 	  for (auto i=0; i<n_nodes; i++){
 	    for (auto j=0; j<this->depth_types_.size(); j++){
 	      switch(depth_types_(j)) { // Basing on the type of depth required
-	      case 1: //MBD
+	      case 1: //SD: simplicial univariate depth
 		{
-		  depths_storage.col(i+j*n_nodes) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+		  depths_storage.col(i+j*n_nodes) = solver.compute_SD(i) * this->phi_function_evaluation_(i);
 	      
 		}
 		break;
@@ -469,7 +469,7 @@ namespace fdapde {
 	      IFD_fit_(k,j) = std::min(mepi_fit_(k), mhypo_fit_(k));  // Check that the std::min are appropriate in vector!!
 	    }
 	  }else{
-	    if(depth_types_(j)==1){ // 1==MBD
+	    if(depth_types_(j)==1){ // 1==SD: simplicial univariate depth
 	      for(auto k=0; k< n_train; k++){ // for every functional datum
 		IFD_fit_(k,j) = IFD_fit_(k,j) / weight_den(k);
 	      }
@@ -533,7 +533,7 @@ namespace fdapde {
 	  
 	    double measure =  this->voronoi_.cell(i).measure();
 	  
-	    if(this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3 ){
+	    if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
 	      measure  = this->external_voronoi_measures_[i];
 	    }
 	  
@@ -549,9 +549,9 @@ namespace fdapde {
 	      int type = pred_depth_types_(j);
       
 	      switch(type) {
-	      case 1: // MBD
+	      case 1: // SD: simplicial univariate depth
 		{
-		  point_depth.col(j) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+		  point_depth.col(j) = solver.compute_SD(i) * this->phi_function_evaluation_(i);
 		}
 		break;
 	    
@@ -602,9 +602,9 @@ namespace fdapde {
 	  for (auto i=0; i<n_nodes; i++){
 	    for (auto j=0; j<this->pred_depth_types_.size(); j++){
 	      switch(pred_depth_types_(j)) { // Basing on the type of depth required
-	      case 1: //MBD
+	      case 1: //SD: simplicial univariate depth
 		{
-		  depths_storage.col(i+j*n_nodes) = solver.compute_MBD(i) * this->phi_function_evaluation_(i);
+		  depths_storage.col(i+j*n_nodes) = solver.compute_SD(i) * this->phi_function_evaluation_(i);
 	      
 		}
 		break;
@@ -698,7 +698,7 @@ namespace fdapde {
 	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k)) / weight_den(k);
 	    }
 	  }else{
-	    if(depth_types_(j)==1){ // 1==MBD
+	    if(depth_types_(j)==1){ // 1==SD: simplicial univariate depth
 	      for(auto k=0; k< n_pred; k++){ // for every functional datum
 		IFD_pred_(k,j) = IFD_pred_(k,j) / weight_den(k);
 	      }
