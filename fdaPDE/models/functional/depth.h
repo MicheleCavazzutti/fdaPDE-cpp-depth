@@ -267,8 +267,8 @@ namespace fdapde {
 	// Now we have available in seed_based_r_fit and seed_based_r_fit_NA_ the computed seed-based (Voronoi or FEM) representation of the matrix.
 	// We can compute the empirical distribution (Q(p)) in the voronoi nodes, using the NA pattern. We provide equal weight to each element
 	int n_train = seed_based_r_fit_.rows();
-	observation_density_vector_.resize(domain_.n_cells());
-	for (auto i=0; i<domain_.n_cells(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
+	observation_density_vector_.resize(domain_.n_nodes());
+	for (auto i=0; i<domain_.n_nodes(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
 	  auto obs_element = seed_based_r_fit_NA_.col(i);
 	  observation_density_vector_(i) = n_train - obs_element.count();
 	}
@@ -279,7 +279,7 @@ namespace fdapde {
       void solve() { //  Compute the integrated depths and the outputs that will be returned (save outputs in a df), fill output 
       
 	int n_train = this->seed_based_r_fit_.rows();
-	int n_nodes = this->domain_.n_cells(); 
+	int n_nodes = this->domain_.n_nodes(); 
 	
 	Depth_Solver solver(this->seed_based_r_fit_, this->seed_based_r_fit_NA_); // This solver uses the Voronoi representations of the fit functions to estimate the empirical measure.
       
@@ -442,13 +442,13 @@ namespace fdapde {
 	    // Compute the barycenters
 	    for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
 	      for(int j = 0; j < this->depth_types_.size(); j++){
-		barycenters_depth.col(j) = barycenters_depth.col(j) + depths_storage.col(node_idx +j*n_nodes);
+		barycenters_depth.col(j) = barycenters_depth.col(j) + depths_storage.col(node_ids(node_idx) +j*n_nodes);
 	      }
-	      barycenters_depth.col(this->depth_types_.size()) = barycenters_depth.col(this->depth_types_.size()) + mepi_storage.col(node_idx);
-	      barycenters_depth.col(this->depth_types_.size()+1) = barycenters_depth.col(this->depth_types_.size()+1) + mhypo_storage.col(node_idx);
-	      barycenters_weights = barycenters_weights + this->phi_function_evaluation_(node_idx);
+	      barycenters_depth.col(this->depth_types_.size()) = barycenters_depth.col(this->depth_types_.size()) + mepi_storage.col(node_ids(node_idx));
+	      barycenters_depth.col(this->depth_types_.size()+1) = barycenters_depth.col(this->depth_types_.size()+1) + mhypo_storage.col(node_ids(node_idx));
+	      barycenters_weights = barycenters_weights + this->phi_function_evaluation_(node_ids(node_idx));
 	      for(auto k=0; k < n_train; k++){
-		if(seed_based_r_fit_NA_(k,node_idx) == true){
+		if(seed_based_r_fit_NA_(k,node_ids(node_idx)) == true){
 		  missing_cell(k) = true;
 		}
 	      }
@@ -672,13 +672,13 @@ namespace fdapde {
 	    // Compute the barycenters
 	    for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
 	      for(int j = 0; j < this->pred_depth_types_.size(); j++){
-		barycenters_depth.col(j) = barycenters_depth.col(j) + depths_storage.col(node_idx +j*n_nodes);
+		barycenters_depth.col(j) = barycenters_depth.col(j) + depths_storage.col(node_ids(node_idx) +j*n_nodes);
 	      }
-	      barycenters_depth.col(this->pred_depth_types_.size()) = barycenters_depth.col(this->pred_depth_types_.size()) + mepi_storage.col(node_idx);
-	      barycenters_depth.col(this->pred_depth_types_.size()+1) = barycenters_depth.col(this->pred_depth_types_.size()+1) + mhypo_storage.col(node_idx);
-	      barycenters_weights = barycenters_weights + this->phi_function_evaluation_(node_idx);
+	      barycenters_depth.col(this->pred_depth_types_.size()) = barycenters_depth.col(this->pred_depth_types_.size()) + mepi_storage.col(node_ids(node_idx));
+	      barycenters_depth.col(this->pred_depth_types_.size()+1) = barycenters_depth.col(this->pred_depth_types_.size()+1) + mhypo_storage.col(node_ids(node_idx));
+	      barycenters_weights = barycenters_weights + this->phi_function_evaluation_(node_ids(node_idx));
 	      for(auto k=0; k < n_pred; k++){
-		if(seed_based_r_fit_NA_(k,node_idx) == true){
+		if(seed_based_r_fit_NA_(k,node_ids(node_idx)) == true){
 		  missing_cell(k) = true;
 		}
 	      }
