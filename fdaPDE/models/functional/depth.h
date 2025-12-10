@@ -552,7 +552,7 @@ namespace fdapde {
 	  
 	    // compute /int_{O} phi(q(p)) dp
 	    for(auto k =0; k<n_pred; k++){
-	      if(!seed_based_r_fit_NA_(k,i)){
+	      if(!seed_based_r_pred_NA_(k,i)){
 		weight_den(k) = weight_den(k) + measure * this->phi_function_evaluation_(i);
 	      }
 	    }
@@ -593,7 +593,7 @@ namespace fdapde {
       
 	    }
 	  
-	    // compute /int_{O} D(X(p), fit_functions)*phi(q(p)) dp
+	    // compute /int_{O} D(X(p), pred_functions)*phi(q(p)) dp
 	    IFD_pred_ = IFD_pred_ + point_depth*measure;
       
 	  }
@@ -654,7 +654,7 @@ namespace fdapde {
 	  barycenters_depth.resize(n_pred,this->pred_depth_types_.size() + 2); // Depths + mepi + mhypo
 	  double barycenters_weights = 0;
 	  DVector<bool> missing_cell;
-	  missing_cell.setConstant(false);
+	  missing_cell.resize(n_pred);
 	
 	  // Perform FEM computation for both the numerator and denominator of FEMD
 	  for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element (triangle or thetahedron in the Triangulation)
@@ -678,7 +678,7 @@ namespace fdapde {
 	      barycenters_depth.col(this->pred_depth_types_.size()+1) = barycenters_depth.col(this->pred_depth_types_.size()+1) + mhypo_storage.col(node_ids(node_idx));
 	      barycenters_weights = barycenters_weights + this->phi_function_evaluation_(node_ids(node_idx));
 	      for(auto k=0; k < n_pred; k++){
-		if(seed_based_r_fit_NA_(k,node_ids(node_idx)) == true){
+		if(seed_based_r_pred_NA_(k,node_ids(node_idx)) == true){
 		  missing_cell(k) = true;
 		}
 	      }
@@ -692,10 +692,10 @@ namespace fdapde {
 		weight_den(k) = weight_den(k) + barycenters_weights * measure;
 	  
 		for(int j =0; j < this->pred_depth_types_.size(); j++){
-		  IFD_fit_(k,j) = IFD_fit_(k,j) + barycenters_depth(k,j)*measure;
+		  IFD_pred_(k,j) = IFD_pred_(k,j) + barycenters_depth(k,j)*measure;
 		}
-		mepi_fit_(k) = mepi_fit_(k) + barycenters_depth.col(this->pred_depth_types_.size())(k)*measure;
-		mhypo_fit_(k) = mhypo_fit_(k) + barycenters_depth.col(this->pred_depth_types_.size()+1)(k)*measure;
+		mepi_pred_(k) = mepi_pred_(k) + barycenters_depth.col(this->pred_depth_types_.size())(k)*measure;
+		mhypo_pred_(k) = mhypo_pred_(k) + barycenters_depth.col(this->pred_depth_types_.size()+1)(k)*measure;
 	      }
 	    }
 	  }
@@ -703,14 +703,14 @@ namespace fdapde {
 	}
 	
 	for(auto j=0; j < this->pred_depth_types_.size();j++){ 
-	  if(depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
+	  if(pred_depth_types_(j)==3){// 3=="MHRD" The minimum between epigraph and hipograph indices
 	    for(auto k =0; k<n_pred; k++){
 	      mepi_pred_(k) = mepi_pred_(k) / weight_den(k);
 	      mhypo_pred_(k) = mhypo_pred_(k) / weight_den(k);
-	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k)) / weight_den(k);
+	      IFD_pred_(k,j) = std::min(mepi_pred_(k), mhypo_pred_(k));
 	    }
 	  }else{
-	    if(depth_types_(j)==1){ // 1==SD: simplicial univariate depth
+	    if(pred_depth_types_(j)==1){ // 1==SD: simplicial univariate depth
 	      for(auto k=0; k< n_pred; k++){ // for every functional datum
 		IFD_pred_(k,j) = IFD_pred_(k,j) / weight_den(k);
 	      }
@@ -858,7 +858,6 @@ namespace fdapde {
       void compute_seed_based_representation_pred(){
 	
 	int n_pred = this->pred_functions_.size();
-	//int n_loc = this->locations_.rows();
 	int n_nodes = this->domain_.n_nodes();
 	
 	if(this->int_method_ == -1){ // Voronoi based integration: we need to compute the spatial averages
@@ -919,6 +918,9 @@ namespace fdapde {
 	  }
 	
 	}else{ // int_method_==0 --> FEM based representaion, locations is just one single matrix identical with the triangulation nodes
+	  // resize the matrices that will store the FEM coefficients for pred functions
+	  seed_based_r_pred_.resize(n_pred, n_nodes);
+	  seed_based_r_pred_NA_.resize(n_pred, n_nodes);
 	
 	  // Filling the coefficients matrices for pred functions
 	  for (auto i =0; i< n_pred; i++){
