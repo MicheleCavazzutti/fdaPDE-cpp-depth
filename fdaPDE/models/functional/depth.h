@@ -27,8 +27,11 @@ using fdapde::core::Voronoi;
 #include "../model_traits.h"
 #include "../sampling_design.h"
 
+#include <cmath>
+
 // In this file, we provide the implementations needed to compute the partially observed integrated functional depth for multidimensional domains
-// The file contains two calsses: 
+// The file contains three calsses:
+//	- Bivariate_Depth_Solver: computes the pointwise univariatebivariate  depths of set of functions with respect to a set of reference functions
 //	- Depth_Solver: computes the pointwise univariate depths of set of functions with respect to a set of reference functions
 //      - DEPTH<Triangulation>: provides all the routines for depth computation, as well as the computation of the functional boxplot. Relies on the Depth_solver class for the actual depth computation. Relyies on the Voronoi<Triangulation> class for Voronoi measures computation, if Voronoi integration is required.  
 
@@ -36,7 +39,7 @@ namespace fdapde {
   namespace models {
   
     // Depth_Solver class:
-    // Class for the computation of univariate depths in the seeds/nodes of the triangulation. This class expects both the fit (referece) and pred fuinctional data to be measured in the same set of points (i.e. the mesh nodesm that coincide with the Voronoi seeds); therefore, a seed based representation is required, which needs to be provided by external routines.
+    // Class for the computation of univariate depths in the seeds/nodes of the triangulation. This class expects both the fit (referece) and pred functional data to be measured in the same set of points (i.e. the mesh nodesm that coincide with the Voronoi seeds); therefore, a seed based representation is required, which needs to be provided by external routines.
     // The class just stores the fit_data_m which represents the functional data used to estimate the pointwise distribution, and pred_data_, which are the functional data that need to be ranked. Not that, if pred_data_ = fit_data_, we obtain the depths of the functional data with respect to themselves, which is the typycal behaviour  expected in Dpeth computation routines. 
     // fit_mask_ and pred_mask_ store the NA patterns for the data, that may be missing in some noeds (partially observed functionaol data).
     // The class exposes the routines that allow to compute the univariate depths in each node. The univariate depth computation requires the ranking of the data in each point as a prestep, which is done in the private routine compute_rankings(). The rankings are stored internally for computational advantage.
@@ -183,6 +186,156 @@ namespace fdapde {
       }
     };
 
+    // Bivariate_Depth_Solver class:
+    // Class for the computation of bivariate depths.
+    // The class just stores the fit_data_ which represents the bivariate data used to estimate the pairwise distribution, and pred_data_, which are the functional data that need to be ranked. Not that, if pred_data_ = fit_data_, we obtain the depths of the bivariate data with respect to themselves, which is the typycal behaviour  expected in Depth computation routines. 
+    class Bivariate_Depth_Solver {
+    private:
+      DMatrix<double> fit_data_;         	// Reference bivariate data. Size: n_fit_points x 2.
+      DMatrix<bool> fit_mask_;           	// Reference bivariate data mask. Size: n_fit_points x 2.
+      DMatrix<double> pred_data_;		// Predictive bivariate data. Size: n_pred_points x 2.
+      DMatrix<bool> pred_mask_;	        	// Predictive bivariate data mask. Size: n_pred_points x 2.
+      int n_fit_points;				
+      int n_pred_points;
+      std::vector<double> alpha;                // Angles that are used in Simplicial depth computation, will be set multiple times
+      std::vector<int> valid_fit_indices;       // set ofthe valid indices, will be set multiple times
+
+    public:
+      Bivariate_Depth_Solver() = default; // default constructor
+      
+      // Setters
+      void set_fit_data(const DMatrix<double> & fit_data, const DMatrix<bool> & fit_mask){
+	fit_data_ = fit_data;
+	fit_mask_ = fit_mask;
+	n_fit_points = fit_data.rows();
+	alpha.reserve(n_fit_points); // Preallocate alpha for simplicial computation
+	valid_fit_indices.reserve(n_fit_points);  // Preallocate valid_fit_indices for simplicial computation
+      }
+      
+      void set_pred_data(const DMatrix<double> & pred_data, const DMatrix<bool> & pred_mask){
+	pred_data_ = pred_data;
+	pred_mask_ = pred_mask;
+	n_pred_points = pred_data.rows();
+      }
+
+      // Routine that computes the bivariate simplicial depth for a set of points.
+      DVector<double> compute_SD() {
+	DVector<double> depths(n_pred_points);
+	const double eps = 1e-12; // Numerical tolerance
+	const double PI = std::acos(-1.0);
+
+	valid_fit_indices.clear();
+	for (int i = 0; i < n_fit_points; ++i) {
+	  // Keep only points with no missing values in both coordinates
+	  if (!fit_mask_(i, 0) && !fit_mask_(i, 1)) {
+            valid_fit_indices.push_back(i);
+	  }
+	}
+
+	long long n_valid_fit = valid_fit_indices.size();
+	// Denominator: total number of 3-point combinations (n choose 3)
+	const double total_simplices =
+	  static_cast<double>(n_valid_fit) *
+	  (n_valid_fit - 1) *
+	  (n_valid_fit - 2) / 6.0;
+
+	for (int zi = 0; zi < n_pred_points; ++zi) {
+	  if (pred_mask_(zi, 0) || pred_mask_(zi, 1)) {
+            depths(zi) = -1.0;
+            continue;
+	  }
+
+	  if (total_simplices < 1.0) {
+            depths(zi) = 0.0;
+            continue;
+	  }
+
+	  const double zx = pred_data_(zi, 0);
+	  const double zy = pred_data_(zi, 1);
+
+	  alpha.clear();
+	  long long nt = 0;
+
+	  for (int idx : valid_fit_indices) {
+            double dx = fit_data_(idx, 0) - zx;
+            double dy = fit_data_(idx, 1) - zy;
+            double d2 = dx * dx + dy * dy;
+
+            // Count points coinciding with z
+            if (d2 <= eps * eps) {
+	      nt++;
+            } else {
+	      // Store angular direction of non-coinciding points
+	      alpha.push_back(std::atan2(dy, dx));
+            }
+	  }
+
+	  const long long nn = alpha.size();
+
+	  if (nn < 2) {
+            // If there are not enough non-coinciding points,
+            // the depth depends only on coinciding points
+            if (nt + nn >= 3) {
+	      // Simplified combinatorial count when most points coincide with z
+	      unsigned long long total_inc =
+		(unsigned long long)nt * (nt - 1) * (nt - 2) / 6 +
+		(unsigned long long)nt * (nt - 1) / 2 * nn;
+	      depths(zi) = static_cast<double>(total_inc) / total_simplices;
+            } else {
+	      depths(zi) = 0.0;
+            }
+            continue;
+	  }
+
+	  std::sort(alpha.begin(), alpha.end());
+
+	  // Duplicate angles to handle circularity without conditional branching
+	  for (long long i = 0; i < nn; ++i) {
+            alpha.push_back(alpha[i] + 2.0 * PI);
+	  }
+
+	  unsigned long long outside = 0;
+	  long long j = 0;
+
+	  // Sliding window (two-pointers) algorithm
+	  for (long long i = 0; i < nn; ++i) {
+            if (j <= i) j = i + 1;
+            // Find the farthest point within a semicircle (PI radians)
+            while (j < 2 * nn && (alpha[j] - alpha[i]) < PI - eps) {
+	      j++;
+            }
+            long long m = j - i - 1;
+            if (m >= 2) {
+	      outside += (unsigned long long)m * (m - 1) / 2;
+            }
+	  }
+
+	  // Triangles containing the origin (using only non-coinciding points)
+	  unsigned long long inside_no_nt = 0;
+	  unsigned long long combinations_nn_3 =
+            (unsigned long long)nn * (nn - 1) * (nn - 2) / 6;
+	  if (combinations_nn_3 > outside) {
+            inside_no_nt = combinations_nn_3 - outside;
+	  }
+
+	  // Add contributions from coinciding points (nt)
+	  // 1. Triangles with 1 coinciding point and 2 non-coinciding points: C(nt,1) * C(nn,2)
+	  // 2. Triangles with 2 coinciding points and 1 non-coinciding point: C(nt,2) * C(nn,1)
+	  // 3. Triangles with 3 coinciding points: C(nt,3)
+	  unsigned long long inside_with_nt =
+            inside_no_nt +
+            (unsigned long long)nt * (nn * (nn - 1) / 2) +
+            ((unsigned long long)nt * (nt - 1) / 2) * nn +
+            (unsigned long long)nt * (nt - 1) * (nt - 2) / 6;
+
+	  depths(zi) = static_cast<double>(inside_with_nt) / total_simplices;
+	}
+
+	return depths;
+      }
+      
+    };
+
     // depth model
     // This template class is the baseline model for depth computation. The template parameter D represents the Triangulation of the support used to represent the geometry of the problem, that is sotred in the Domain variable. The class stores the reference functional data used to compute the distribution of the functional depth (fit data). The functional data may be only partially observable (that is, missing in some locations), a feature that may be expressed using the NA masks associated to the data. Moreover, the measurement locations may vary for each statistical unit to another. The main utility is the method solve, that computes the partially observed integrated functional depth for the fit data with respect to themselves. Thhe method allows for two types of integral approximations: Voronoi based approximation and FEM based approximation. Through the method predict() is also possible to compute the depths of some novel functional data with respect to the fit data, possibly carachterized by different locations and different missing patterns. The class also carries out the computations of the objects needed for the construction of a functional boxplot based on fit data.
     template <typename D> 							// Domain type
@@ -262,21 +415,67 @@ namespace fdapde {
 	}
 	
 	// At first compute the seed-based representation of data; this needs to be done after the voronoi has been computed if int_method_ == 0.
-	this->compute_seed_based_representation_fit(); 
+	this->compute_seed_based_representation_fit();
+
+	// initialize the depth structures
+	int n_train = this->seed_based_r_fit_.rows();
+	int n_nodes = this->domain_.n_nodes();
 	
 	// Now we have available in seed_based_r_fit and seed_based_r_fit_NA_ the computed seed-based (Voronoi or FEM) representation of the matrix.
 	// We can compute the empirical distribution (Q(p)) in the voronoi nodes, using the NA pattern. We provide equal weight to each element
-	int n_train = seed_based_r_fit_.rows();
 	observation_density_vector_.resize(domain_.n_nodes());
 	for (auto i=0; i<domain_.n_nodes(); i++){// for each node of the mesh, count how many times a cell has been observed in the Voronoi mask. 
 	  auto obs_element = seed_based_r_fit_NA_.col(i);
 	  observation_density_vector_(i) = n_train - obs_element.count();
 	}
 	observation_density_vector_ = observation_density_vector_ / n_train;
+
+	this->IFD_fit_.resize(n_train, this->depth_types_.size());
+	this->mepi_fit_.resize(n_train);
+	this->mhypo_fit_.resize(n_train);
+
+	// initialization
+	for (auto i =0; i < n_train; i++){
+	  mepi_fit_(i) = 0;
+	  mhypo_fit_(i) = 0;
+	  for(auto j =0 ; j<this->depth_types_.size(); j++){
+	    IFD_fit_(i,j)=0;
+	  }
+ 	}
+
+	// Ready to solve the problem
 	return; 
       } 
       
       void solve() { //  Compute the integrated depths and the outputs that will be returned (save outputs in a df), fill output 
+	
+	bool single_integral_present = false;
+	bool double_integral_present = false;
+      
+	for(auto j =0 ; j<this->depth_types_.size(); j++){
+	  if(this->depth_types_(j) == 1 || this->depth_types_(j) == 2 || this->depth_types_(j) == 3){
+	    single_integral_present = true;
+	  }
+	  if(this->depth_types_(j) == 4){ // DI-Depth
+	    double_integral_present = true;
+	  }
+	}
+
+	// Call the solvers for the single or double integral cases
+	if(single_integral_present){
+	  this->solve_single_integral_case();
+	}
+	if(double_integral_present){
+	  this->solve_double_integral_case();
+	}
+      
+	// only for fit functions, one can also compute the functional boxplot quantities. In principle, this may also be done in R, but here is faster
+	this->compute_functional_boxplot();
+
+	return; 
+      }
+
+      void solve_single_integral_case() { //  Compute the integrated depths and the outputs that will be returned (save outputs in a df), fill output 
       
 	int n_train = this->seed_based_r_fit_.rows();
 	int n_nodes = this->domain_.n_nodes(); 
@@ -286,10 +485,6 @@ namespace fdapde {
 	solver.set_pred_data(this->seed_based_r_fit_);
 	solver.set_pred_mask(this->seed_based_r_fit_NA_);
       
-	this->IFD_fit_.resize(n_train, this->depth_types_.size());
-	this->mepi_fit_.resize(n_train);
-	this->mhypo_fit_.resize(n_train);
-      
 	DMatrix<double> point_depth;
 	DMatrix<double> point_aux;
 	
@@ -298,13 +493,10 @@ namespace fdapde {
 	
 	// initialization
 	for (auto i =0; i < n_train; i++){
-	  mepi_fit_(i) = 0;
-	  mhypo_fit_(i) = 0;
 	  point_aux(i,0) = 0;
 	  point_aux(i,1) = 0;
 	  for(auto j =0 ; j<this->depth_types_.size(); j++){
-	    IFD_fit_(i,j)=0;
-	    point_depth(i,j)=0;
+	    point_depth(i,j)=0; // Note: if j refers to a type of depth with double integral, we will leave the point depth tozero, so not to affect the output of the double integral solver
 	  }
  	}
 	
@@ -359,7 +551,7 @@ namespace fdapde {
 		break;
 	    
 	      default:
-		{} 
+		{} // This case also encapsulates the double integral depths, where essentially we do not want to modify the depth computed in the double integral solver
 		break;
 	     
 	      }
@@ -376,12 +568,15 @@ namespace fdapde {
 	  // # nodes x depth_types.size();
 	  DMatrix<double> depths_storage;
 	  depths_storage.resize(n_train, n_nodes * depth_types_.size()); // One column for each node and each type of depth required
+	  depths_storage.setZero();
 	  DMatrix<double> mepi_storage;
 	  mepi_storage.resize(n_train, n_nodes);
+	  mepi_storage.setZero();
 	  DMatrix<double> mhypo_storage;
 	  mhypo_storage.resize(n_train, n_nodes);
+	  mepi_storage.setZero();
 	
-	  // Extract the depths from solver before FEM computation.
+	  // Extract the depths from the univariate depth solver before FEM computation.
 	  for (auto i=0; i<n_nodes; i++){
 	    for (auto j=0; j<this->depth_types_.size(); j++){
 	      switch(depth_types_(j)) { // Basing on the type of depth required
@@ -409,12 +604,12 @@ namespace fdapde {
 		}  
 		break;
 	    
-	      default:
-		{} 
+	      default: // this case encapsulates the situation when part of the depths required are double integral depths
+		{
+		}
 		break;
 	     
 	      }
-      
       
 	    }
 	  }
@@ -489,12 +684,192 @@ namespace fdapde {
 	    }
 	  }
 	}
-	
-	// only for fit functions, one can also compute the functional boxplot quantities. In principle, this may also be done in R, but here is faster
-	this->compute_functional_boxplot();
 
 	return; 
-      } 
+      }
+
+      void solve_double_integral_case(){
+	int n_train = this->seed_based_r_fit_.rows();
+	int n_nodes = this->domain_.n_nodes();
+	
+	Bivariate_Depth_Solver solver; // This solver will compute the multivariate depth for each location couple; Will be recycled for each couple, so to avoid multiple dynamic memory allocation
+	DMatrix<double> aux_bivariate_data_fit;
+	DMatrix<bool> aux_bivariate_data_mask;
+	DMatrix<double> aux_couple;
+	DMatrix<bool> aux_couple_mask;
+	aux_bivariate_data_fit.resize(n_train,2);
+	aux_bivariate_data_mask.resize(n_train,2);
+	aux_couple.resize(1,2);
+	aux_couple_mask.resize(1,2);
+
+	// weighting function denominator
+	DVector<double> weight_den; // We will need to fill this while performing the integrals
+	
+	// Auxiliary variables to store the bivariate depths
+	DMatrix<float> depths_storage;
+	depths_storage.resize(n_nodes, n_nodes); // One column for each node and each type of depth required // To be initialized in each cycle for functional datum in fit
+	
+	// Cycle over the required depth types; here the logic differs from the one of the single integral case
+	// Compute the depth for each double integral depth type and store it in IFD_fit_ 
+	for(auto j = 0; j < this->depth_types_.size(); j++){
+	  if(this->depth_types_(j)==1 || this->depth_types_(j)==2|| this->depth_types_(j)==3){ // It is not a double integral, skip it
+	    continue; 
+	  }
+	  
+	  // initialization of weight den
+	  weight_den.resize(n_train);
+	  for(auto i = 0; i< n_train; i++){
+	    weight_den(i)=0;
+	  }
+	  
+	  // Matrix that stores the result of the second integral over the domain for each node, and for each train function
+	  DMatrix<double> expectations_at_nodes;
+	  expectations_at_nodes.resize(n_train, n_nodes);
+	  expectations_at_nodes.setConstant(0);
+	  
+	  // Matrix that stores the result of the second integral for the weight function over the domain for each node, and for each train function
+	  DMatrix<double> expectations_weight;
+	  expectations_weight.resize(n_train, n_nodes);
+	  expectations_weight.setConstant(0);
+	  
+	  // for each functional datum, store the multivariate depths; then compute the second integral and store the result for each node into Expectation_at_nodes
+	  for(auto i = 0; i < n_train; i++){
+	    // initialize depth_storage to -1 (unfeasible value) in order to understand if we have computed a bivariate depth already
+	    depths_storage.setConstant(-1);
+
+	    // Compute and store the bivariate depths needed
+	    for(auto node_1 = 0; node_1 < n_nodes; node_1++){
+	      for(auto node_2 = 0; node_2 <= node_1; node_2++){
+		if(!seed_based_r_fit_NA_(i,node_1) && !seed_based_r_fit_NA_(i,node_2)){ // Both the functional evaluations are present, we can compute the multivariate depth with respect to the nonmissing data
+		  // set the couple of which we need to compute the multivariate depth
+		  aux_couple(0,0) = seed_based_r_fit_(i,node_1);
+		  aux_couple(0,1) = seed_based_r_fit_(i,node_2);
+		  aux_couple_mask(0,0) = seed_based_r_fit_NA_(i,node_1);
+		  aux_couple_mask(0,1) = seed_based_r_fit_NA_(i,node_2);
+
+		  // Set the corresponding bivariate fit data with respect to which we compute the multivariate depth
+		  aux_bivariate_data_fit.col(0) = seed_based_r_fit_.col(node_1);
+		  aux_bivariate_data_fit.col(1) = seed_based_r_fit_.col(node_2);
+		  aux_bivariate_data_mask.col(0) = seed_based_r_fit_NA_.col(node_1);
+		  aux_bivariate_data_mask.col(1) = seed_based_r_fit_NA_.col(node_2);
+		  
+		  // Set the mutlivariate depth solver
+		  solver.set_fit_data(aux_bivariate_data_fit, aux_bivariate_data_mask);
+		  solver.set_pred_data(aux_couple, aux_couple_mask);
+
+		  // Compute and store the multivariate depth using the bivariate solver
+		  depths_storage(node_1, node_2) = solver.compute_SD()(0) * this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) ;
+		  depths_storage(node_2, node_1) = depths_storage(node_1, node_2); // The multivariate depth is symmetric
+		}// Otherwise just skip the couple, will allso be skipped in the integral
+		
+	      }
+	    }
+
+	    // Second integral computation
+	    if(this->int_method_ == -1){ // Voronoi case
+	      std::cout << "Warning: Voronoi integration not supported yet for double integral depths." << std::endl; 
+	    }else{ // FEM-0 case
+
+	      // Integrate over the second node 
+	      // Aux variables that sum up in the expectations
+	      DVector<double> barycenters_depth;
+	      barycenters_depth.resize(n_nodes); 
+	      DVector<double> barycenters_weights;
+	      barycenters_weights.resize(n_nodes);
+	      bool missing_cell = false;
+	
+	      // Perform FEM computation for both the numerator and denominator of FEMD
+	      for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element (triangle or thetahedron in the Triangulation)
+		// initialize
+		barycenters_depth.setZero();
+		barycenters_weights.setZero();
+		missing_cell=false;
+	
+		// Get the measure of the simplex
+		double measure = iter->measure();
+	  
+		// Extract the nodes indices
+		DVector<int> node_ids = iter->node_ids();
+	  
+		// Compute the barycenters
+		for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
+		  barycenters_depth = barycenters_depth + (depths_storage.col(node_idx)).cast<double>();
+		  for(auto node_1 = 0; node_1 < n_nodes; node_1++){
+		    barycenters_weights(node_1) = barycenters_weights(node_1) + this->phi_function_evaluation_(node_ids(node_idx)) * this->phi_function_evaluation_(node_1);
+		  }
+		  if(seed_based_r_fit_NA_(i,node_ids(node_idx)) == true){ // the evaluation of the current function is missing on that specific node
+		    missing_cell = true;
+		  }
+		}
+		barycenters_depth = barycenters_depth / node_ids.size();
+		barycenters_weights = barycenters_weights / node_ids.size();
+
+		// Add the elements to the expectations for each node
+		if(!missing_cell){// only if all the nodes in the simplex were present, otherwise skip the cell in this integral
+		  expectations_at_nodes.row(i) = expectations_at_nodes.row(i) + barycenters_depth*measure;
+		  expectations_weight.row(i) = expectations_weight.row(i) + barycenters_weights*measure;
+		}
+	      }
+	    } // End FEM-0 case
+	  }// End cycle over n_train
+	  
+	  // finally we perform the integral over the first node
+	  // Aux variables
+	  DVector<double> barycenters_depth;
+	  barycenters_depth.resize(n_train); // Depth
+	  DVector<double> barycenters_weights;
+	  barycenters_weights.resize(n_train); // Denominator weights
+	  DVector<bool> missing_cell;
+	  missing_cell.resize(n_train);
+
+	  if(this->int_method_ == -1){ // Voronoi case
+	    std::cout << "Warning: Voronoi integration not supported yet for double integral depths." << std::endl; 
+	  }else{ // FEM-0 case
+	    // Perform FEM computation for both the numerator and denominator of FEMD
+	    for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element (triangle or thetahedron in the Triangulation)
+	      // initialize
+	      barycenters_depth.setZero();
+	      barycenters_weights.setZero();
+	      missing_cell.setConstant(false);
+	
+	      // Get the measure of the simplex
+	      double measure = iter->measure();
+	  
+	      // Extract the nodes indices
+	      DVector<int> node_ids = iter->node_ids();
+	  
+	      // Compute the barycenters
+	      for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
+		barycenters_depth = barycenters_depth + expectations_at_nodes.col(node_ids(node_idx));
+		barycenters_weights = barycenters_weights + expectations_weight.col(node_ids(node_idx));
+		for(auto k=0; k < n_train; k++){
+		  if(seed_based_r_fit_NA_(k,node_ids(node_idx)) == true){
+		    missing_cell(k) = true;
+		  }
+		}
+	      }
+	      barycenters_depth = barycenters_depth / node_ids.size();
+	      barycenters_weights = barycenters_weights / node_ids.size();
+	  
+	      // Add the elements to the overall integral
+	      for(auto k=0; k < n_train; k++){
+		if(missing_cell(k)==false){ // If the function is missing in the cell k, just skip it (non-exisiting in the integral)
+		  weight_den(k) = weight_den(k) + barycenters_weights(k) * measure;
+		  IFD_fit_(k,j) = IFD_fit_(k,j) + barycenters_depth(k)*measure;
+		}
+	      }
+	    }
+	  } // end of if FEM-0
+
+	  for(auto k=0; k < n_train; k++){ // Normalize w.r.t. the weight denominator
+	    if(weight_den(k) > 1e-10) 
+	      IFD_fit_(k,j) = IFD_fit_(k,j)/ weight_den(k);
+	  }
+
+	}// end depth_types_cycle
+
+	return;
+      }
       
       void predict() { 
 	
