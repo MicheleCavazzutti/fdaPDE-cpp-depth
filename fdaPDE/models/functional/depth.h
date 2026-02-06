@@ -351,6 +351,7 @@ namespace fdapde {
       // setters
       void set_locations(const std::vector<DMatrix<double>> &  locations){  locations_ =  locations ; }
       void set_pred_locations(const std::vector<DMatrix<double>> &  locations_pred){  locations_pred_ =  locations_pred ; }
+      void set_roi(const DVector<int> & roi ) { roi_ = roi; }
       void set_depth_types(const DVector<int> & depth_types ) { depth_types_ = depth_types; }
       void set_pred_depth_types(const DVector<int> & depth_types ) { pred_depth_types_ = depth_types; }
       void set_train_functions(const std::vector<DVector<double>> &  train_functions){  train_functions_ =  train_functions ; }
@@ -417,6 +418,9 @@ namespace fdapde {
 	// At first compute the seed-based representation of data; this needs to be done after the voronoi has been computed if int_method_ == 0.
 	this->compute_seed_based_representation_fit();
 
+	// If depth_types_ inclused PDI- depths, compute the node patches for FEM-0 or the node rings for Voronoi
+	this->compute_seed_patches();
+
 	// initialize the depth structures
 	int n_train = this->seed_based_r_fit_.rows();
 	int n_nodes = this->domain_.n_nodes();
@@ -452,11 +456,11 @@ namespace fdapde {
 	bool single_integral_present = false;
 	bool double_integral_present = false;
       
-	for(auto j =0 ; j<this->depth_types_.size(); j++){
+	for(auto j = 0 ; j < this->depth_types_.size(); j++){
 	  if(this->depth_types_(j) == 1 || this->depth_types_(j) == 2 || this->depth_types_(j) == 3){
 	    single_integral_present = true;
 	  }
-	  if(this->depth_types_(j) == 4){ // DI-Depth
+	  if(this->depth_types_(j) == 4 || this->depth_types_(j) == 5){ // DI-Depth, PDI-Depth
 	    double_integral_present = true;
 	  }
 	}
@@ -718,8 +722,8 @@ namespace fdapde {
 	  
 	  // initialization of weight den
 	  weight_den.resize(n_train);
-	  for(auto i = 0; i< n_train; i++){
-	    weight_den(i)=0;
+	  for(auto k = 0; k < n_train; k++){
+	    weight_den(k)=0;
 	  }
 	  
 	  // Matrix that stores the result of the second integral over the domain for each node, and for each train function
@@ -733,53 +737,71 @@ namespace fdapde {
 	  expectations_weight.setConstant(0);
 	  
 	  // for each functional datum, store the multivariate depths; then compute the second integral and store the result for each node into Expectation_at_nodes
-	  for(auto i = 0; i < n_train; i++){
+	  for(auto k = 0; k < n_train; k++){
 	    // initialize depth_storage to -1 (unfeasible value) in order to understand if we have computed a bivariate depth already
-	    depths_storage.setConstant(-1);
+	    depths_storage.setConstant(0);
 
 	    // Compute and store the bivariate depths needed
 	    for(auto node_1 = 0; node_1 < n_nodes; node_1++){
 	      for(auto node_2 = 0; node_2 <= node_1; node_2++){
-		if(!seed_based_r_fit_NA_(i,node_1) && !seed_based_r_fit_NA_(i,node_2)){ // Both the functional evaluations are present, we can compute the multivariate depth with respect to the nonmissing data
-		  // set the couple of which we need to compute the multivariate depth
-		  aux_couple(0,0) = seed_based_r_fit_(i,node_1);
-		  aux_couple(0,1) = seed_based_r_fit_(i,node_2);
-		  aux_couple_mask(0,0) = seed_based_r_fit_NA_(i,node_1);
-		  aux_couple_mask(0,1) = seed_based_r_fit_NA_(i,node_2);
+		if(this->depth_types_(j)==4 ||( this->depth_types_(j)==5 && seed_rings_[node_1].contains(node_2))){ // Either we are computing DI-SD and we need to compute all the couples, or PDI-SS, and we restrict to the node ring or ROI, for each node_1
+		  if(!seed_based_r_fit_NA_(k,node_1) && !seed_based_r_fit_NA_(k,node_2)){ // Both the functional evaluations are present, we can compute the multivariate depth with respect to the nonmissing data
+		    // set the couple of which we need to compute the multivariate depth
+		    aux_couple(0,0) = seed_based_r_fit_(k,node_1);
+		    aux_couple(0,1) = seed_based_r_fit_(k,node_2);
+		    aux_couple_mask(0,0) = seed_based_r_fit_NA_(k,node_1);
+		    aux_couple_mask(0,1) = seed_based_r_fit_NA_(k,node_2);
 
-		  // Set the corresponding bivariate fit data with respect to which we compute the multivariate depth
-		  aux_bivariate_data_fit.col(0) = seed_based_r_fit_.col(node_1);
-		  aux_bivariate_data_fit.col(1) = seed_based_r_fit_.col(node_2);
-		  aux_bivariate_data_mask.col(0) = seed_based_r_fit_NA_.col(node_1);
-		  aux_bivariate_data_mask.col(1) = seed_based_r_fit_NA_.col(node_2);
+		    // Set the corresponding bivariate fit data with respect to which we compute the multivariate depth
+		    aux_bivariate_data_fit.col(0) = seed_based_r_fit_.col(node_1);
+		    aux_bivariate_data_fit.col(1) = seed_based_r_fit_.col(node_2);
+		    aux_bivariate_data_mask.col(0) = seed_based_r_fit_NA_.col(node_1);
+		    aux_bivariate_data_mask.col(1) = seed_based_r_fit_NA_.col(node_2);
 		  
-		  // Set the mutlivariate depth solver
-		  solver.set_fit_data(aux_bivariate_data_fit, aux_bivariate_data_mask);
-		  solver.set_pred_data(aux_couple, aux_couple_mask);
+		    // Set the mutlivariate depth solver
+		    solver.set_fit_data(aux_bivariate_data_fit, aux_bivariate_data_mask);
+		    solver.set_pred_data(aux_couple, aux_couple_mask);
 
-		  // Compute and store the multivariate depth using the bivariate solver
-		  depths_storage(node_1, node_2) = solver.compute_SD()(0) * this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) ;
-		  depths_storage(node_2, node_1) = depths_storage(node_1, node_2); // The multivariate depth is symmetric
-		}// Otherwise just skip the couple, will allso be skipped in the integral
+		    // Compute and store the multivariate depth using the bivariate solver
+		    depths_storage(node_1, node_2) = solver.compute_SD()(0) * this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) ;
+		    depths_storage(node_2, node_1) = depths_storage(node_1, node_2); // The multivariate depth is symmetric
+		  }// Otherwise just skip the couple, will allso be skipped in the integral
+		}
 		
 	      }
 	    }
 
 	    // Second integral computation
 	    if(this->int_method_ == -1){ // Voronoi case
-	      std::cout << "Warning: Voronoi integration not supported yet for double integral depths." << std::endl; 
-	    }else{ // FEM-0 case
+	      // Perform Voronoi computation for both the numerator and denominator of the DI depth
+	      for(auto node_1 = 0; node_1 < n_nodes; node_1++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
+		// extract the measure of the Voronoi cell 
+		double measure = this->voronoi_.cell(node_1).measure();
+		if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
+		  measure  = this->external_voronoi_measures_[node_1];
+		}
 
-	      // Integrate over the second node 
+		for(auto node_2 = 0; node_2 < n_nodes; node_2++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
+		  if(this->depth_types_(j)==4 ||( this->depth_types_(j)==5 && seed_rings_[node_1].contains(node_2))){ // Either we are computing DI-SD and we need to compute all the couples, or PDI-SS, and we restrict to the node ring or ROI, for each node_1
+		    // Add the elements to the expectations for each node
+		    if(!seed_based_r_fit_NA_(k,node_1) && !seed_based_r_fit_NA_(k,node_2)){// only if all the nodes in the simplex were present, otherwise skip the cell in this integral
+		      expectations_at_nodes(k,node_1) = expectations_at_nodes(k,node_1) + depths_storage(node_1,node_2)*measure;
+		      expectations_weight(k,node_1) = expectations_weight(k,node_1) + this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) * measure;
+		    }
+		  }
+		}
+	      }
+	    }else{ // FEM-0 case
 	      // Aux variables that sum up in the expectations
 	      DVector<double> barycenters_depth;
 	      barycenters_depth.resize(n_nodes); 
 	      DVector<double> barycenters_weights;
 	      barycenters_weights.resize(n_nodes);
 	      bool missing_cell = false;
+	      int cell_index = 0;
 	
-	      // Perform FEM computation for both the numerator and denominator of FEMD
-	      for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element (triangle or thetahedron in the Triangulation)
+	      // Perform FEM computation for both the numerator and denominator of the DI depth
+	      for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter, ++cell_index){ // For each element (triangle or thetahedron in the Triangulation)
 		// initialize
 		barycenters_depth.setZero();
 		barycenters_weights.setZero();
@@ -797,7 +819,7 @@ namespace fdapde {
 		  for(auto node_1 = 0; node_1 < n_nodes; node_1++){
 		    barycenters_weights(node_1) = barycenters_weights(node_1) + this->phi_function_evaluation_(node_ids(node_idx)) * this->phi_function_evaluation_(node_1);
 		  }
-		  if(seed_based_r_fit_NA_(i,node_ids(node_idx)) == true){ // the evaluation of the current function is missing on that specific node
+		  if(seed_based_r_fit_NA_(k,node_ids(node_idx)) == true){ // the evaluation of the current function is missing on that specific node
 		    missing_cell = true;
 		  }
 		}
@@ -806,8 +828,12 @@ namespace fdapde {
 
 		// Add the elements to the expectations for each node
 		if(!missing_cell){// only if all the nodes in the simplex were present, otherwise skip the cell in this integral
-		  expectations_at_nodes.row(i) = expectations_at_nodes.row(i) + barycenters_depth*measure;
-		  expectations_weight.row(i) = expectations_weight.row(i) + barycenters_weights*measure;
+		  for(auto node_1 = 0; node_1 < n_nodes; node_1++){
+		      if(this->depth_types_(j)==4 ||( this->depth_types_(j)==5 && seed_patches_[node_1].contains(cell_index))){ // Either we are computing DI-SD and we need to compute all the couples, or PDI-SS, and we restrict to the node ringpatch  or ROI, for each node_1
+			expectations_at_nodes(k,node_1) = expectations_at_nodes(k,node_1) + barycenters_depth*measure;
+			expectations_weight(k,node_1) = expectations_weight.row(k,node_1) + barycenters_weights*measure;
+		      }
+		  }
 		}
 	      }
 	    } // End FEM-0 case
@@ -823,9 +849,24 @@ namespace fdapde {
 	  missing_cell.resize(n_train);
 
 	  if(this->int_method_ == -1){ // Voronoi case
-	    std::cout << "Warning: Voronoi integration not supported yet for double integral depths." << std::endl; 
+	    // Perform Voronoi computation for both the numerator and denominator of the DI depth
+	    for(auto i = 0; i < n_nodes; i++){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
+	      // extract the measure of the Voronoi cell 
+	      double measure = this->voronoi_.cell(i).measure();
+	      if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
+		measure  = this->external_voronoi_measures_[i];
+	      }
+
+	      // Add the elements to the overall integral
+	      for(auto k=0; k < n_train; k++){
+		if(!seed_based_r_fit_NA_(k,i)){ // If the function is missing in the cell k, just skip it (non-exisiting in the integral)
+		  weight_den(k) = weight_den(k) + expectations_weight(k,i) * measure;
+		  IFD_fit_(k,j) = IFD_fit_(k,j) + expectations_at_nodes(k,i) * measure;
+		}
+	      }
+	    }
 	  }else{ // FEM-0 case
-	    // Perform FEM computation for both the numerator and denominator of FEMD
+	    // Perform FEM computation for both the numerator and denominator of DI depth
 	    for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element (triangle or thetahedron in the Triangulation)
 	      // initialize
 	      barycenters_depth.setZero();
@@ -1104,6 +1145,9 @@ namespace fdapde {
       // Problem data
       std::vector<DMatrix<double>> locations_; 		// Locations, vector of matrices of locations, dimension may vary. If only one element is present, those are common locations for all the functions; Otherwise we have a locations set for every function. If int_method_ == -1 (FEM) then we have only one matrix that concided with the matrix of nodes 
       std::vector<DMatrix<double>> locations_pred_;    // Locations for predicted functions, vector of matrices of locations, dimension may vary. If only one element is present, those are common locations for all the functions; Otherwise we have a locations set for every function.
+      DVector<int> roi_; 	         	        // Vector of integers  indicating the nodes/elements in the Region Of Interest for the Partial Double Integral depth
+      std::vector<std::unordered_set<int>> seed_patches_;// A vector of unordered_set, where each element correspond to the  three_node_patch used for the Partial Double Integral
+       std::vector<std::unordered_set<int>> seed_rings_;// A vector of unordered_set, where each element correspond to the three_node_ring  used for the Partial Double Integral
       DVector<int> depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute IFDs required by the user
       DVector<int> pred_depth_types_; 		        // Vector of strings indicating the types of univariate depths used to compute predictive IFDs required by the user
       std::vector<DVector<double>> train_functions_; 	// Functional data used to compute the empirical measures and the associated IFDs, with respect to themeselves. Dimension: n_train, each fucntion may have different size
@@ -1311,6 +1355,59 @@ namespace fdapde {
 	  }
 	}
 	
+	return;
+      }
+
+      void compute_seed_patches(){
+	bool partial_double_integral_required=false;
+	for(auto d_t : this->depth_types_){
+	  if(d_t==5){
+	    partial_double_integral_required =true;
+	  }
+	}
+
+	if(!partial_double_integral_required){
+	  return; // No partial double integral depth requires, just skip the task
+	}
+
+	int n_nodes = seed_based_r_fit_.cols(); // This happens after the seed based representation
+	
+	this->seed_patches_.resize(seed_based_r_fit_.cols());
+
+	if(roi_.size()==1){
+	  for(auto j = 0; j < n_nodes; ++j){
+	    seed_rings_[j] = domain_.node_k_ring(j,3); // Compute the node_three_ring
+	    if(this->int_method_!= 0){ // FEM case, we need to compute the node patches
+	      seed_patches_[j] = domain_.node_k_patch(j,3); // Compute the node_three_patch
+	    }
+	  }
+	}else{
+	  if(this->int_method_ == 0){ // Voronoi case, roi_ contains the nodes of the ROI and we do not need to do anything
+	    std::unordered_set<int> roi_nodes(roi_.data(), roi_.data() + roi_.size());
+	    for(auto j = 0; j < n_nodes; ++j){
+	      seed_rings_[j] = roi_nodes;
+	    }
+	  }else{ // FEM-0 case, we need to extract the roi_nodes
+	    std::unordered_set<int> roi_patch(roi_.data(), roi_.data() + roi_.size());
+	    int index = 0;
+	    std::unordered_set<int> roi_nodes;
+	    for(typename D::cell_iterator iter = domain_.cells_begin(); iter != domain_.cells_end(); ++iter){ // For each element
+	      if(roi_patch.count(index)==1){ // This element is in the ROI patch
+		// Extract the nodes indices
+		DVector<int> node_ids = iter->node_ids();
+		for(auto node_idx : node_ids){
+		  roi_nodes.insert(node_idx);
+		}
+	      }
+	      index++;
+	    }
+	    for(auto j = 0; j < n_nodes; ++j){
+	      seed_rings_[j] = roi_nodes; // Compute the node_three_ring
+	      seed_patches_[j] = roi_patch; // Compute the node_thre_patch
+	    }
+	  }
+	}
+
 	return;
       }
       
