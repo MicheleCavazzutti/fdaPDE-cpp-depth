@@ -775,16 +775,15 @@ namespace fdapde {
 	    if(this->int_method_ == -1){ // Voronoi case
 	      // Perform Voronoi computation for both the numerator and denominator of the DI depth
 	      for(auto node_1 = 0; node_1 < n_nodes; node_1++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
-		// extract the measure of the Voronoi cell 
-		double measure = this->voronoi_.cell(node_1).measure();
-		if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
-		  measure  = this->external_voronoi_measures_[node_1];
-		}
-
 		for(auto node_2 = 0; node_2 < n_nodes; node_2++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
 		  if(this->depth_types_(j)==4 ||( this->depth_types_(j)==5 && seed_rings_[node_1].contains(node_2))){ // Either we are computing DI-SD and we need to compute all the couples, or PDI-SS, and we restrict to the node ring or ROI, for each node_1
 		    // Add the elements to the expectations for each node
 		    if(!seed_based_r_fit_NA_(k,node_1) && !seed_based_r_fit_NA_(k,node_2)){// only if all the nodes in the simplex were present, otherwise skip the cell in this integral
+		      // extract the measure of the Voronoi cell 
+		      double measure = this->voronoi_.cell(node_2).measure();
+		      if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
+			measure  = this->external_voronoi_measures_[node_2];
+		      }
 		      expectations_at_nodes(k,node_1) = expectations_at_nodes(k,node_1) + depths_storage(node_1,node_2)*measure;
 		      expectations_weight(k,node_1) = expectations_weight(k,node_1) + this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) * measure;
 		    }
@@ -815,7 +814,7 @@ namespace fdapde {
 	  
 		// Compute the barycenters
 		for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
-		  barycenters_depth = barycenters_depth + (depths_storage.col(node_idx)).cast<double>();
+		  barycenters_depth = barycenters_depth + (depths_storage.col(node_ids(node_idx))).cast<double>();
 		  for(auto node_1 = 0; node_1 < n_nodes; node_1++){
 		    barycenters_weights(node_1) = barycenters_weights(node_1) + this->phi_function_evaluation_(node_ids(node_idx)) * this->phi_function_evaluation_(node_1);
 		  }
@@ -1249,16 +1248,15 @@ namespace fdapde {
 	    if(this->int_method_ == -1){ // Voronoi case
 	      // Perform Voronoi computation for both the numerator and denominator of the DI depth
 	      for(auto node_1 = 0; node_1 < n_nodes; node_1++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
-		// extract the measure of the Voronoi cell 
-		double measure = this->voronoi_.cell(node_1).measure();
-		if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
-		  measure  = this->external_voronoi_measures_[node_1];
-		}
-
 		for(auto node_2 = 0; node_2 < n_nodes; node_2++ ){ // For each node of the triangulation (and seed of the dual Voronoi tessellation)
 		  if(this->pred_depth_types_(j)==4 ||( this->pred_depth_types_(j)==5 && seed_rings_[node_1].contains(node_2))){ // Either we are computing DI-SD and we need to compute all the couples, or PDI-SS, and we restrict to the node ring or ROI, for each node_1
 		    // Add the elements to the expectations for each node
 		    if(!seed_based_r_pred_NA_(k,node_1) && !seed_based_r_pred_NA_(k,node_2)){// only if all the nodes in the simplex were present, otherwise skip the cell in this integral
+		      // extract the measure of the Voronoi cell 
+		      double measure = this->voronoi_.cell(node_2).measure();
+		      if((this->voronoi_.local_dim == 2 && this->voronoi_.embed_dim == 3) || (this->voronoi_.local_dim == 3 && this->voronoi_.embed_dim == 3)){ // In the 2.5D and 3D case we resort t external Voronoi measures
+			measure  = this->external_voronoi_measures_[node_2];
+		      }
 		      expectations_at_nodes(k,node_1) = expectations_at_nodes(k,node_1) + depths_storage(node_1,node_2)*measure;
 		      expectations_weight(k,node_1) = expectations_weight(k,node_1) + this->phi_function_evaluation_(node_1) * this->phi_function_evaluation_(node_2) * measure;
 		    }
@@ -1289,7 +1287,7 @@ namespace fdapde {
 	  
 		// Compute the barycenters
 		for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
-		  barycenters_depth = barycenters_depth + (depths_storage.col(node_idx)).cast<double>();
+		  barycenters_depth = barycenters_depth + (depths_storage.col(node_ids(node_idx))).cast<double>();
 		  for(auto node_1 = 0; node_1 < n_nodes; node_1++){
 		    barycenters_weights(node_1) = barycenters_weights(node_1) + this->phi_function_evaluation_(node_ids(node_idx)) * this->phi_function_evaluation_(node_1);
 		  }
@@ -1608,32 +1606,35 @@ namespace fdapde {
       }
 
       void compute_seed_patches(){
+	
+	int n_nodes = seed_based_r_fit_.cols(); // This happens after the seed based representation
+	
+	this->seed_patches_.resize(seed_based_r_fit_.cols());
+	this->seed_rings_.resize(seed_based_r_fit_.cols());
+
+	
 	bool partial_double_integral_required=false;
 	for(auto d_t : this->depth_types_){
 	  if(d_t==5){
 	    partial_double_integral_required =true;
 	  }
 	}
-
+	
 	if(!partial_double_integral_required){
 	  return; // No partial double integral depth requires, just skip the task
 	}
-
-	int n_nodes = seed_based_r_fit_.cols(); // This happens after the seed based representation
-	
-	this->seed_patches_.resize(seed_based_r_fit_.cols());
 
 	if(roi_.size()==1){
 	  for(auto j = 0; j < n_nodes; ++j){
 	    std::vector<int> node_k_ring = domain_.node_k_ring(j,3); // Compute the node_three_ring
 	    seed_rings_[j] = std::unordered_set<int>(node_k_ring.begin(),node_k_ring.end());
-	    if(this->int_method_!= 0){ // FEM case, we need to compute the node patches
+	    if(this->int_method_!= -1){ // FEM case, we need to compute the node patches
 	      std::vector<int> node_k_patch =  domain_.node_k_patch(j,3); // Compute the node_three_patch
 	      seed_patches_[j] = std::unordered_set<int>(node_k_patch.begin(),node_k_patch.end()); 
 	    }
 	  }
 	}else{
-	  if(this->int_method_ == 0){ // Voronoi case, roi_ contains the nodes of the ROI and we do not need to do anything
+	  if(this->int_method_ == -1){ // Voronoi case, roi_ contains the nodes of the ROI and we do not need to do anything
 	    std::unordered_set<int> roi_nodes(roi_.data(), roi_.data() + roi_.size());
 	    for(auto j = 0; j < n_nodes; ++j){
 	      seed_rings_[j] = roi_nodes;
