@@ -1197,6 +1197,7 @@ namespace fdapde {
 	  weight_den.resize(n_pred);
 	  for(auto k = 0; k < n_pred; k++){
 	    weight_den(k)=0;
+	    IFD_pred_(k,j)=0;
 	  }
 	  
 	  // Matrix that stores the result of the second integral over the domain for each node, and for each pred function
@@ -1355,7 +1356,7 @@ namespace fdapde {
 	      for(int node_idx = 0; node_idx < node_ids.size(); node_idx++){
 		barycenters_depth = barycenters_depth + expectations_at_nodes.col(node_ids(node_idx));
 		barycenters_weights = barycenters_weights + expectations_weight.col(node_ids(node_idx));
-		for(auto k=0; k < n_train; k++){
+		for(auto k=0; k < n_pred; k++){
 		  if(seed_based_r_pred_NA_(k,node_ids(node_idx)) == true){
 		    missing_cell(k) = true;
 		  }
